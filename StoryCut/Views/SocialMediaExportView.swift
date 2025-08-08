@@ -277,7 +277,15 @@ struct SocialMediaExportView: View {
         // Build a minimal project with a single clip for export
         var project = VideoProject(name: "Social Export")
         project.clips = [EditableClip(videoURL: videoURL)]
-        exportService.exportVideo(project: project) { result in
+        // Map social platform to ExportPreset
+        let preset: ExportPreset
+        switch selectedPlatform {
+        case .tikTok: preset = .tikTok
+        case .instagram: preset = .reels
+        case .youtube: preset = .shorts
+        default: preset = .custom
+        }
+        exportService.exportVideo(project: project, preset: preset, quality: .high) { result in
             switch result {
             case .success(let exportedURL):
                 // Share to social media

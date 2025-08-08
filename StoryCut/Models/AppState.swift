@@ -9,7 +9,7 @@ class AppState: ObservableObject {
     @Published var speechPermission: SFSpeechRecognizerAuthorizationStatus = .notDetermined
     @Published var currentProject: VideoProject?
     @Published var isEditing: Bool = false
-    @Published var selectedTab: EditorTab = .importMedia
+    @Published var selectedTab: EditorTab = .single
     
     // Export settings
     @Published var exportPreset: ExportPreset = .tikTok
@@ -20,11 +20,7 @@ class AppState: ObservableObject {
     @Published var showingExportSheet = false
     
     enum EditorTab: String, CaseIterable {
-        case importMedia = "Import"
-        case timeline = "Timeline"
-        case audio = "Audio"
-        case subtitles = "Subtitles"
-        case export = "Export"
+        case single = "Create"
     }
 }
 
@@ -76,6 +72,15 @@ enum ExportPreset: String, CaseIterable, Codable {
     
     var codec: String {
         return "H.264"
+    }
+
+    var maxDurationSeconds: Int? {
+        switch self {
+        case .tikTok: return 60
+        case .reels: return 90
+        case .shorts: return 60
+        case .custom: return nil
+        }
     }
 }
 

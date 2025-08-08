@@ -14,37 +14,16 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Main content area
-                TabView(selection: $appState.selectedTab) {
-                    ImportView()
-                        .tag(AppState.EditorTab.importMedia)
-                    
-                    TimelineView()
-                        .tag(AppState.EditorTab.timeline)
-                    
-                    AudioEditorView()
-                        .tag(AppState.EditorTab.audio)
-                    
-                    SubtitleEditorView()
-                        .tag(AppState.EditorTab.subtitles)
-                    
-                    ExportView()
-                        .tag(AppState.EditorTab.export)
-                }
-                #if os(iOS)
-                .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
-                #else
-                .tabViewStyle(DefaultTabViewStyle())
-                #endif
-                
-                // Custom tab bar
-                CustomTabBar()
-                    .background(.ultraThinMaterial)
+                // Single unified screen
+                UnifiedEditorView()
+                    .background(.clear)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle("StoryCut")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             #endif
             .toolbar {
                 #if os(iOS)
@@ -57,20 +36,10 @@ struct ContentView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 12) {
-                        // Quick Social Export Button
                         Button(action: { showingSocialExport = true }) {
                             Image(systemName: "square.and.arrow.up")
-                                .foregroundColor(.green)
                         }
                         .disabled(appState.currentProject?.clips.isEmpty ?? true)
-                        
-                        // Full Export Button
-                        if appState.currentProject != nil {
-                            Button("Export") {
-                                appState.showingExportSheet = true
-                            }
-                            .disabled(appState.currentProject?.clips.isEmpty ?? true)
-                        }
                     }
                 }
                 #else
@@ -121,53 +90,61 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Custom Tab Bar
-struct CustomTabBar: View {
+// Unified single-screen editor
+struct UnifiedEditorView: View {
     @EnvironmentObject var appState: AppState
+    @State private var lastExportURL: URL?
     
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(AppState.EditorTab.allCases, id: \.self) { tab in
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        appState.selectedTab = tab
-                    }
-                }) {
-                    VStack(spacing: 4) {
-                        Image(systemName: iconName(for: tab))
-                            .font(.system(size: 20, weight: .medium))
-                        
-                        Text(tab.rawValue)
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                    }
-                    .foregroundColor(appState.selectedTab == tab ? .accentColor : .secondary)
+        ScrollView {
+            VStack(spacing: 16) {
+                // 1) Import section (always visible)
+                ImportView()
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Divider().opacity(0.2)
+
+                // 2) Timeline + player
+                TimelineView()
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
+
+                // 3) Export presets and action
+                ExportView()
+                    .environmentObject(appState)
+
+                if let url = lastExportURL {
+                    VStack(spacing: 8) {
+                        Text("Exported:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text(url.lastPathComponent)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        #if os(iOS)
+                        ShareLink(item: url) {
+                            Label("Share / Save", systemImage: "square.and.arrow.up")
+                        }
+                        .buttonStyle(.bordered)
+                        #endif
+                    }
                 }
             }
+            .padding(.bottom, 24)
         }
-                        .background(Color.secondary.opacity(0.1))
-        .overlay(
-            Rectangle()
-                .frame(height: 0.5)
-                .foregroundColor(Color.secondary.opacity(0.3)),
-            alignment: .top
-        )
     }
     
-    private func iconName(for tab: AppState.EditorTab) -> String {
-        switch tab {
-        case .importMedia:
-            return "plus.circle"
-        case .timeline:
-            return "film"
-        case .audio:
-            return "waveform"
-        case .subtitles:
-            return "text.bubble"
-        case .export:
-            return "square.and.arrow.up"
+    private func quickExport() {
+        guard let project = appState.currentProject, project.clips.isEmpty == false else { return }
+        let service = VideoExportService()
+        let preset = appState.exportPreset
+        let quality = appState.exportQuality
+        service.exportVideo(project: project, preset: preset, quality: quality) { result in
+            switch result {
+            case .success(let url):
+                DispatchQueue.main.async { self.lastExportURL = url }
+            case .failure(let error):
+                print("Quick export failed: \(error)")
+            }
         }
     }
 }

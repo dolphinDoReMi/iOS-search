@@ -12,13 +12,12 @@ struct ImportView: View {
     @EnvironmentObject var appState: AppState
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var showingImagePicker = false
-    @State private var showingMusicPicker = false
-    @State private var showingFileImporter = false
+    // Removed per request: music picker and Files importer
     @State private var importedVideos: [URL] = []
-    @State private var importedAudio: [URL] = []
+    // Removed per request: imported audio
     @State private var showingError = false
     @State private var errorMessage = ""
-    @State private var showingSocialExport = false
+    // Removed per request: quick social export entry
     @State private var showCameraUnavailable = false
     @State private var isDownloadingSample = false
     
@@ -42,20 +41,8 @@ struct ImportView: View {
                 }
                 .padding(.top, 40)
                 
-                // Quick Actions
+                // Import Options
                 VStack(spacing: 16) {
-                    // Quick Export to Social Media
-                    QuickActionCard(
-                        title: "Quick Export to Social Media",
-                        subtitle: "Select a video and export directly",
-                        icon: "square.and.arrow.up",
-                        color: .green,
-                        isProminent: true
-                    ) {
-                        showingSocialExport = true
-                    }
-                    
-                    // Import Options
                     ImportOptionCard(
                         title: "Import Videos",
                         subtitle: "Select from your photo library",
@@ -66,72 +53,14 @@ struct ImportView: View {
                     }
                     
                     ImportOptionCard(
-                        title: "Import from Files",
-                        subtitle: "Browse videos in Files",
-                        icon: "folder",
-                        color: .teal
-                    ) {
-                        showingFileImporter = true
-                    }
-                    
-                    ImportOptionCard(
-                        title: "Add Music",
-                        subtitle: "Import background music",
-                        icon: "music.note",
-                        color: .purple
-                    ) {
-                        showingMusicPicker = true
-                    }
-                    
-                    ImportOptionCard(
-                        title: "Record Video",
-                        subtitle: "Capture new footage",
-                        icon: "camera.fill",
+                        title: "Import from Social Link",
+                        subtitle: "Paste TikTok/Reels/Shorts URL",
+                        icon: "link",
                         color: .orange
                     ) {
-                        #if os(iOS)
-                        if UIImagePickerController.isSourceTypeAvailable(.camera) == false {
-                            showCameraUnavailable = true
-                        } else {
-                            showCameraUnavailable = true // Simulator placeholder; guide to device
-                        }
-                        #endif
+                        presentSocialLinkPrompt()
                     }
 
-                    // Load a sample clip (for Simulator/dev machines without Photos content)
-                    Button(action: loadSampleClip) {
-                        HStack(spacing: 16) {
-                            Image(systemName: "arrow.down.circle")
-                                .font(.title2)
-                                .foregroundColor(.blue)
-                                .frame(width: 40, height: 40)
-                                .background(Color.blue.opacity(0.1))
-                                .cornerRadius(10)
-
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(isDownloadingSample ? "Downloading sample…" : "Load Sample Video")
-                                    .font(.headline)
-                                    .foregroundColor(.primary)
-                                Text("Adds a short demo clip to get started")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-
-                            Spacer()
-
-                            if isDownloadingSample {
-                                ProgressView()
-                            } else {
-                                Image(systemName: "chevron.right")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        .padding()
-                        .background(Color.secondary.opacity(0.1))
-                        .cornerRadius(12)
-                    }
-                    .buttonStyle(PlainButtonStyle())
                 }
                 
                 // Imported Content Preview
@@ -173,36 +102,7 @@ struct ImportView: View {
             }
         }
         .photosPicker(isPresented: $showingImagePicker, selection: $selectedItems, matching: .videos)
-        .task {
-            // Prefetch authorization to ensure prompt is surfaced early in flow
-            let status = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
-            if status == .limited {
-                // Optional: present limited-library picker if needed in future
-            }
-        }
-        .fileImporter(isPresented: $showingFileImporter, allowedContentTypes: [UTType.movie, UTType.video]) { result in
-            switch result {
-            case .success(let url):
-                // Security-scoped access on iOS/macOS when needed
-                let accessGranted = url.startAccessingSecurityScopedResource()
-                defer { if accessGranted { url.stopAccessingSecurityScopedResource() } }
-                importedVideos.append(url)
-            case .failure(let error):
-                errorMessage = "Failed to import from Files: \(error.localizedDescription)"
-                showingError = true
-            }
-        }
-        .fileImporter(isPresented: $showingMusicPicker, allowedContentTypes: [UTType.audio]) { result in
-            switch result {
-            case .success(let url):
-                let accessGranted = url.startAccessingSecurityScopedResource()
-                defer { if accessGranted { url.stopAccessingSecurityScopedResource() } }
-                importedAudio.append(url)
-            case .failure(let error):
-                errorMessage = "Failed to import audio: \(error.localizedDescription)"
-                showingError = true
-            }
-        }
+        // Removed: Files and Music importers per request
         .onChange(of: selectedItems) { oldValue, newValue in
             Task {
                 await processSelectedVideos(newValue)
@@ -213,29 +113,30 @@ struct ImportView: View {
         } message: {
             Text(errorMessage)
         }
-        .sheet(isPresented: $showingSocialExport) {
-            SocialMediaExportView()
-        }
-        .alert("Camera Unavailable", isPresented: $showCameraUnavailable) {
-            Button("OK") { }
-        } message: {
-            Text("Camera recording is not available in the simulator. Please run on a real device.")
-        }
+        // Removed: quick social export sheet
+        // Removed camera alert; replaced with link import
     }
     
     private func processSelectedVideos(_ items: [PhotosPickerItem]) async {
         for item in items {
             do {
-                if let url = try await item.loadTransferable(type: URL.self) {
-                    await MainActor.run { importedVideos.append(url) }
+                // Prefer URL (file-based) to avoid large memory copies
+                if let tempURL = try? await item.loadTransferable(type: URL.self) {
+                    let saved = try await copyIntoDocuments(originalURL: tempURL)
+                    await MainActor.run { importedVideos.append(saved) }
                     continue
                 }
-                if let data = try await item.loadTransferable(type: Data.self) {
+
+                // Fallback to Data if URL not available
+                if let data = try? await item.loadTransferable(type: Data.self) {
                     let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-                    let dest = docs.appendingPathComponent("video_\(Date().timeIntervalSince1970).mov")
+                    let dest = docs.appendingPathComponent("video_\(Int(Date().timeIntervalSince1970)).mp4")
                     try data.write(to: dest)
                     await MainActor.run { importedVideos.append(dest) }
+                    continue
                 }
+
+                throw NSError(domain: "StoryCut", code: -1, userInfo: [NSLocalizedDescriptionKey: "Unsupported selection"]) 
             } catch {
                 await MainActor.run {
                     errorMessage = "Failed to import video: \(error.localizedDescription)"
@@ -255,32 +156,87 @@ struct ImportView: View {
             appState.currentProject?.clips.append(clip)
         }
         
-        // Switch to timeline view
-        withAnimation {
-            appState.selectedTab = .timeline
-        }
+        // Stay in a single unified screen; no tab switch needed
     }
 
-    private func loadSampleClip() {
-        guard !isDownloadingSample else { return }
-        isDownloadingSample = true
-        Task {
-            defer { isDownloadingSample = false }
-            do {
-                // Small public domain sample video
-                let url = URL(string: "https://sample-videos.com/video321/mp4/240/big_buck_bunny_240p_1mb.mp4")!
-                let (tempURL, _) = try await URLSession.shared.download(from: url)
-                let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-                let dest = docs.appendingPathComponent("sample_\(Int(Date().timeIntervalSince1970)).mp4")
-                try FileManager.default.moveItem(at: tempURL, to: dest)
-                await MainActor.run {
-                    importedVideos.append(dest)
+    // Removed: sample downloader per request
+
+    // MARK: - Utilities
+    private func copyIntoDocuments(originalURL: URL) async throws -> URL {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        var destination = docs.appendingPathComponent(originalURL.lastPathComponent)
+        
+        // Ensure unique filename
+        if FileManager.default.fileExists(atPath: destination.path) {
+            let name = destination.deletingPathExtension().lastPathComponent
+            let ext = destination.pathExtension
+            destination = docs.appendingPathComponent("\(name)_\(Int(Date().timeIntervalSince1970)).\(ext.isEmpty ? "mov" : ext)")
+        }
+
+        // Handle security-scoped URLs (from file picker)
+        if originalURL.startAccessingSecurityScopedResource() {
+            defer { originalURL.stopAccessingSecurityScopedResource() }
+            
+            // Handle iCloud files
+            if let rv = try? originalURL.resourceValues(forKeys: [.isUbiquitousItemKey]),
+               rv.isUbiquitousItem == true {
+                try FileManager.default.startDownloadingUbiquitousItem(at: originalURL)
+                // Wait for download (with timeout)
+                let start = Date()
+                while Date().timeIntervalSince(start) < 10 {
+                    if let rv2 = try? originalURL.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]),
+                       rv2.ubiquitousItemDownloadingStatus == .current {
+                        break
+                    }
+                    try await Task.sleep(nanoseconds: 200_000_000) // 0.2s
                 }
-            } catch {
-                await MainActor.run {
-                    errorMessage = "Failed to download sample: \(error.localizedDescription)"
-                    showingError = true
-                }
+            }
+            
+            // Copy the file
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.copyItem(at: originalURL, to: destination)
+            return destination
+        }
+        
+        // Handle non-security-scoped URLs (e.g., from Photos)
+        if let data = try? Data(contentsOf: originalURL) {
+            try data.write(to: destination)
+            return destination
+        }
+        
+        throw NSError(domain: "StoryCut", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to access file"])
+    }
+
+    // MARK: - Social Link Import
+    private func presentSocialLinkPrompt() {
+        #if os(iOS)
+        let alert = UIAlertController(title: "Import from Link", message: "Paste a TikTok/Reels/Shorts URL", preferredStyle: .alert)
+        alert.addTextField { $0.placeholder = "https://..." }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Import", style: .default) { _ in
+            if let text = alert.textFields?.first?.text, let url = URL(string: text) { Task { await handleSocialLink(url) } }
+        })
+        
+        // Use modern UIWindowScene API instead of deprecated UIApplication.shared.windows
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = windowScene.windows.first {
+            window.rootViewController?.present(alert, animated: true)
+        }
+        #endif
+    }
+
+    private func handleSocialLink(_ url: URL) async {
+        do {
+            // Simple direct download. For real-world TikTok/IG links, a server-side resolver is needed.
+            let (tempURL, _) = try await URLSession.shared.download(from: url)
+            let saved = try await copyIntoDocuments(originalURL: tempURL)
+            await MainActor.run { importedVideos.append(saved) }
+        } catch {
+            await MainActor.run {
+                errorMessage = "Failed to import link: \(error.localizedDescription)"
+                showingError = true
             }
         }
     }

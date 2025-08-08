@@ -11,6 +11,8 @@ class VideoExportService: ObservableObject {
     /// The resulting URL is suitable for sharing/saving.
     func exportVideo(
         project: VideoProject,
+        preset: ExportPreset? = nil,
+        quality: ExportQuality? = nil,
         completion: @escaping (Result<URL, Error>) -> Void
     ) {
         isExporting = true
@@ -18,7 +20,7 @@ class VideoExportService: ObservableObject {
         
         Task {
             do {
-                let exportedURL = try await processProject(project: project)
+                let exportedURL = try await processProject(project: project, preset: preset, quality: quality)
                 
                 await MainActor.run {
                     self.isExporting = false
@@ -34,97 +36,160 @@ class VideoExportService: ObservableObject {
         }
     }
     
-    private func processProject(project: VideoProject) async throws -> URL {
+    private func processProject(project: VideoProject, preset: ExportPreset?, quality: ExportQuality?) async throws -> URL {
         guard project.clips.isEmpty == false else { throw VideoExportError.noVideoTrack }
 
         // Build composition from clips
         let composition = AVMutableComposition()
         let videoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid)
+        let audioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
         var cursor: CMTime = .zero
-        for clip in project.clips {
+        
+        // Create audio mix for volume control
+        let audioMix = AVMutableAudioMix()
+        var audioParams: [AVMutableAudioMixInputParameters] = []
+        
+        // Capture source dimensions from the first clip for sizing transforms
+        var sourceNaturalSize: CGSize = .zero
+        var sourcePreferredTransform: CGAffineTransform = .identity
+
+        for (index, clip) in project.clips.enumerated() {
             let asset = AVURLAsset(url: clip.videoURL)
-            guard let srcTrack = try await asset.loadTracks(withMediaType: .video).first else { continue }
-            let timeRange = CMTimeRange(start: clip.startTime, duration: clip.duration)
-            try videoTrack?.insertTimeRange(timeRange, of: srcTrack, at: cursor)
+            
+            // Load video track
+            if let srcTrack = try await asset.loadTracks(withMediaType: .video).first {
+                if index == 0 {
+                    sourceNaturalSize = try await srcTrack.load(.naturalSize)
+                    sourcePreferredTransform = try await srcTrack.load(.preferredTransform)
+                }
+                let timeRange = CMTimeRange(start: clip.startTime, duration: clip.duration)
+                try videoTrack?.insertTimeRange(timeRange, of: srcTrack, at: cursor)
+            }
+            
+            // Load audio track
+            if let srcAudioTrack = try await asset.loadTracks(withMediaType: .audio).first {
+                let timeRange = CMTimeRange(start: clip.startTime, duration: clip.duration)
+                try audioTrack?.insertTimeRange(timeRange, of: srcAudioTrack, at: cursor)
+                
+                // Set volume for this segment
+                let params = AVMutableAudioMixInputParameters(track: audioTrack)
+                params.setVolume(clip.volume, at: cursor)
+                params.setVolumeRamp(fromStartVolume: clip.volume, toEndVolume: clip.volume, timeRange: timeRange)
+                audioParams.append(params)
+            }
+            
             cursor = CMTimeAdd(cursor, clip.duration)
         }
+        
+        // Apply audio mix if we have parameters
+        if !audioParams.isEmpty {
+            audioMix.inputParameters = audioParams
+        }
 
-        // Export to a file
-        guard let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
+        // Set up export session
+        // Choose export preset by desired quality if provided
+        let exportPresetName: String
+        switch quality ?? .high {
+        case .high:
+            exportPresetName = AVAssetExportPresetHighestQuality
+        case .medium:
+            exportPresetName = AVAssetExportPreset1280x720
+        case .low:
+            exportPresetName = AVAssetExportPreset640x480
+        }
+
+        guard let exportSession = AVAssetExportSession(
+            asset: composition,
+            presetName: exportPresetName
+        ) else {
             throw VideoExportError.exportSessionCreationFailed
         }
+        
+        // Create output URL in Documents
         let outputURL = createOutputURL()
+        if FileManager.default.fileExists(atPath: outputURL.path) {
+            try FileManager.default.removeItem(at: outputURL)
+        }
+        
+        // Configure export
         exportSession.outputURL = outputURL
         exportSession.outputFileType = .mp4
         exportSession.shouldOptimizeForNetworkUse = true
+        exportSession.audioMix = audioMix // Apply our audio mix
+        
+        // If a platform preset is provided, enforce duration limit and output geometry
+        if let preset = preset {
+            // Limit duration without changing speed
+            if let limit = preset.maxDurationSeconds {
+                let maxDuration = CMTime(seconds: Double(limit), preferredTimescale: 600)
+                if composition.duration > maxDuration {
+                    exportSession.timeRange = CMTimeRange(start: .zero, duration: maxDuration)
+                }
+            }
 
-        // Progress polling
+            // Apply video composition with target render size and frame rate
+            let targetSize = preset.resolution
+            let frameDuration = CMTime(value: 1, timescale: CMTimeScale(preset.frameRate))
+            
+            let videoComposition = AVMutableVideoComposition()
+            videoComposition.renderSize = targetSize
+            videoComposition.frameDuration = frameDuration
+            
+            let instruction = AVMutableVideoCompositionInstruction()
+            instruction.timeRange = CMTimeRange(start: .zero, duration: composition.duration)
+            if let compVideoTrack = videoTrack {
+                let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: compVideoTrack)
+                
+                // Compute aspect-fit transform from source to target
+                let srcSize = CGSize(width: abs(sourceNaturalSize.width), height: abs(sourceNaturalSize.height))
+                let scaleX = targetSize.width / max(srcSize.width, 1)
+                let scaleY = targetSize.height / max(srcSize.height, 1)
+                let scale = min(scaleX, scaleY) // aspect fit
+                let scaledSize = CGSize(width: srcSize.width * scale, height: srcSize.height * scale)
+                let translateX = (targetSize.width - scaledSize.width) / 2.0
+                let translateY = (targetSize.height - scaledSize.height) / 2.0
+                
+                var transform = sourcePreferredTransform
+                transform = transform.concatenating(CGAffineTransform(scaleX: scale, y: scale))
+                transform = transform.concatenating(CGAffineTransform(translationX: translateX, y: translateY))
+                
+                layerInstruction.setTransform(transform, at: .zero)
+                instruction.layerInstructions = [layerInstruction]
+            }
+            videoComposition.instructions = [instruction]
+            exportSession.videoComposition = videoComposition
+        }
+        
+        // Progress polling with more frequent updates
         Task.detached { [weak self] in
             while exportSession.status == .waiting || exportSession.status == .exporting {
                 let p = Double(exportSession.progress)
                 await MainActor.run { self?.exportProgress = p }
-                try? await Task.sleep(nanoseconds: 200_000_000)
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s for smoother updates
             }
         }
-
+        
+        // Perform export
         await exportSession.export()
-        if exportSession.status == .completed { return outputURL }
-        throw VideoExportError.exportFailed(exportSession.error)
+        
+        switch exportSession.status {
+        case .completed:
+            print("Export completed successfully. File saved to: \(outputURL.path)")
+            return outputURL
+        case .failed:
+            throw VideoExportError.exportFailed(exportSession.error)
+        case .cancelled:
+            throw VideoExportError.exportFailed(NSError(domain: "StoryCut", code: -1, userInfo: [NSLocalizedDescriptionKey: "Export was cancelled"]))
+        default:
+            throw VideoExportError.exportFailed(NSError(domain: "StoryCut", code: -1, userInfo: [NSLocalizedDescriptionKey: "Export ended in unexpected state: \(exportSession.status)"]))
+        }
+
+        // Close async function
     }
     
     // Removed per production export (we choose preset by quality later if needed)
     
-    private func createVideoComposition(
-        for composition: AVComposition,
-        platform: SocialPlatform
-    ) -> AVMutableVideoComposition {
-        // Note: AVMutableVideoComposition is deprecated but still functional
-        // In a production app, this should be updated to use AVVideoComposition.Configuration
-        let videoComposition = AVMutableVideoComposition()
-        videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
-        
-        // Set render size based on platform
-        let renderSize = getRenderSize(for: platform)
-        videoComposition.renderSize = renderSize
-        
-        // Create instruction
-        let instruction = AVMutableVideoCompositionInstruction()
-        instruction.timeRange = CMTimeRange(start: .zero, duration: composition.duration)
-        
-        if let firstTrack = composition.tracks.first {
-            let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: firstTrack)
-            
-            // Calculate transform for aspect ratio
-            let transform = calculateTransform(for: platform, renderSize: renderSize)
-            layerInstruction.setTransform(transform, at: .zero)
-            
-            instruction.layerInstructions = [layerInstruction]
-        }
-        
-        videoComposition.instructions = [instruction]
-        
-        return videoComposition
-    }
-    
-    private func getRenderSize(for platform: SocialPlatform) -> CGSize {
-        switch platform {
-        case .tikTok, .instagram:
-            return CGSize(width: 1080, height: 1920) // 9:16
-        case .youtube:
-            return CGSize(width: 1920, height: 1080) // 16:9
-        case .twitter, .facebook, .linkedin:
-            return CGSize(width: 1080, height: 1080) // 1:1
-        }
-    }
-    
-    private func calculateTransform(for platform: SocialPlatform, renderSize: CGSize) -> CGAffineTransform {
-        // This is a simplified transform calculation
-        // In a real implementation, you would calculate the proper transform
-        // based on the source video dimensions and target aspect ratio
-        return CGAffineTransform.identity
-    }
-    
-    private func createOutputURL() -> URL {
+    func createOutputURL() -> URL {
         let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let fileName = "storycut_export_\(Int(Date().timeIntervalSince1970)).mp4"
         return documentsDirectory.appendingPathComponent(fileName)
@@ -163,7 +228,10 @@ extension VideoExportService {
             completion(true)
         }
     }
-    
+}
+
+// MARK: - Social Media Helpers
+extension VideoExportService {
     func generateHashtags(for platform: SocialPlatform) -> [String] {
         switch platform {
         case .tikTok:

@@ -27,23 +27,41 @@ struct ExportView: View {
                 }
                 .padding(.top)
                 
-                // Export Presets
+                // Export Presets + Resolution + FPS
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Export Preset")
                         .font(.headline)
-                    
-                    LazyVGrid(columns: [
-                        GridItem(.flexible()),
-                        GridItem(.flexible())
-                    ], spacing: 12) {
-                        ForEach(ExportPreset.allCases, id: \.self) { preset in
-                            ExportPresetCard(
-                                preset: preset,
-                                isSelected: selectedPreset == preset
-                            ) {
-                                selectedPreset = preset
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            ForEach(ExportPreset.allCases, id: \.self) { preset in
+                                ExportPresetCard(
+                                    preset: preset,
+                                    isSelected: selectedPreset == preset
+                                ) {
+                                    selectedPreset = preset
+                                }
+                                .frame(width: 140)
                             }
                         }
+                    }
+
+                    // Social platform chooser & resolution/fps summary
+                    HStack(spacing: 12) {
+                        Picker("Platform", selection: $selectedPreset) {
+                            Text("TikTok").tag(ExportPreset.tikTok)
+                            Text("Reels").tag(ExportPreset.reels)
+                            Text("Shorts").tag(ExportPreset.shorts)
+                            Text("Custom").tag(ExportPreset.custom)
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                    .padding(.top, 4)
+                    
+                    HStack {
+                        Label("\(Int(selectedPreset.resolution.width))x\(Int(selectedPreset.resolution.height))", systemImage: "rectangle.compress.vertical")
+                        Spacer()
+                        Label("\(selectedPreset.frameRate) fps", systemImage: "speedometer")
                     }
                 }
                 .padding()
@@ -155,11 +173,25 @@ struct ExportView: View {
                 }
 
                 if let url = exportedURL {
-                    #if os(iOS)
-                    ShareLink(item: url) { Text("Share Exported Video") }
+                    VStack(spacing: 12) {
+                        Text("Export Location:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text(url.path)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                        
+                        #if os(iOS)
+                        ShareLink(item: url) {
+                            Label("Share Exported Video", systemImage: "square.and.arrow.up")
+                        }
                         .buttonStyle(.borderedProminent)
-                        .padding(.horizontal)
-                    #endif
+                        .padding(.top, 4)
+                        #endif
+                    }
+                    .padding(.horizontal)
                 }
                 
                 Spacer(minLength: 100)
@@ -178,7 +210,7 @@ struct ExportView: View {
         exportProgress = 0.0
         let service = VideoExportService()
         // Simple polling to reflect progress (avoid Combine plumbing here)
-        service.exportVideo(project: project) { result in
+        service.exportVideo(project: project, preset: appState.exportPreset, quality: appState.exportQuality) { result in
             DispatchQueue.main.async {
                 self.isExporting = false
                 switch result {

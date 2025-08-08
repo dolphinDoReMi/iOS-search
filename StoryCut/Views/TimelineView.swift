@@ -1,5 +1,8 @@
 import SwiftUI
 import AVFoundation
+#if os(iOS)
+import AVKit
+#endif
 #if os(macOS)
 import AppKit
 #endif
@@ -10,6 +13,7 @@ struct TimelineView: View {
     @State private var isPlaying = false
     @State private var selectedClip: EditableClip?
     @State private var showingClipEditor = false
+    @State private var showDeleteConfirm = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -19,7 +23,11 @@ struct TimelineView: View {
                 isPlaying: $isPlaying,
                 project: appState.currentProject
             )
-            .frame(height: 300)
+            .frame(height: 320)
+            .frame(maxWidth: .infinity)
+            .background(Color.black)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal)
             
             // Timeline Controls
             TimelineControlsView(
@@ -37,10 +45,23 @@ struct TimelineView: View {
             )
             .frame(height: 200)
             
-            // Clip Properties
+            // Clip Properties + quick edit bar
             if let selectedClip = selectedClip {
-                ClipPropertiesView(clip: selectedClip)
+                ClipPropertiesPanel(clipId: selectedClip.id)
                     .padding()
+
+                EditToolbar(
+                    onSplit: splitAtPlayhead,
+                    onTrimStart: trimStartToPlayhead,
+                    onTrimEnd: trimEndToPlayhead,
+                    onDuplicate: duplicateSelected,
+                    onDelete: { showDeleteConfirm = true }
+                )
+                .padding(.horizontal)
+                .confirmationDialog("Delete clip?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+                    Button("Delete", role: .destructive) { deleteSelected() }
+                    Button("Cancel", role: .cancel) {}
+                }
             }
         }
         .sheet(isPresented: $showingClipEditor) {
@@ -51,6 +72,7 @@ struct TimelineView: View {
         .onChange(of: selectedClip) { oldValue, newValue in
             showingClipEditor = newValue != nil
         }
+        // Quick edit actions toolbar visibility handled inside the body where a clip is selected
         .onReceive(NotificationCenter.default.publisher(for: .storycutUpdateClip)) { notification in
             guard var project = appState.currentProject,
                   let id = notification.userInfo?["clipId"] as? UUID,
@@ -71,6 +93,163 @@ struct TimelineView: View {
         }
     }
 }
+
+// MARK: - IG-like Edit Toolbar
+struct EditToolbar: View {
+    let onSplit: () -> Void
+    let onTrimStart: () -> Void
+    let onTrimEnd: () -> Void
+    let onDuplicate: () -> Void
+    let onDelete: () -> Void
+    
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                Button(action: onSplit) { Label("Split", systemImage: "scissors") }
+                Button(action: onTrimStart) { Label("Trim Start", systemImage: "arrow.uturn.backward") }
+                Button(action: onTrimEnd) { Label("Trim End", systemImage: "arrow.uturn.forward") }
+                Button(action: onDuplicate) { Label("Duplicate", systemImage: "plus.square.on.square") }
+                Button(role: .destructive, action: onDelete) { Label("Delete", systemImage: "trash") }
+            }
+            .buttonStyle(.bordered)
+            .padding(8)
+            .background(Color.secondary.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+    }
+}
+
+// MARK: - Editing actions
+extension TimelineView {
+    private func splitAtPlayhead() {
+        guard var project = appState.currentProject,
+              let clip = selectedClip,
+              let idx = project.clips.firstIndex(where: { $0.id == clip.id }) else { return }
+        let t = currentTime
+        guard t > clip.startTime && t < clip.endTime else { return }
+        var first = clip
+        first.endTime = t
+        var second = clip
+        second.startTime = t
+        second.id = UUID()
+        project.clips.remove(at: idx)
+        project.clips.insert(contentsOf: [first, second], at: idx)
+        selectedClip = second
+        appState.currentProject = project
+    }
+    
+    private func trimStartToPlayhead() {
+        guard var project = appState.currentProject,
+              let clip = selectedClip,
+              let idx = project.clips.firstIndex(where: { $0.id == clip.id }) else { return }
+        let t = currentTime
+        if t < project.clips[idx].endTime { project.clips[idx].startTime = t }
+        appState.currentProject = project
+    }
+    
+    private func trimEndToPlayhead() {
+        guard var project = appState.currentProject,
+              let clip = selectedClip,
+              let idx = project.clips.firstIndex(where: { $0.id == clip.id }) else { return }
+        let t = currentTime
+        if t > project.clips[idx].startTime { project.clips[idx].endTime = t }
+        appState.currentProject = project
+    }
+    
+    private func duplicateSelected() {
+        guard var project = appState.currentProject,
+              let clip = selectedClip,
+              let idx = project.clips.firstIndex(where: { $0.id == clip.id }) else { return }
+        var copy = clip
+        copy.id = UUID()
+        project.clips.insert(copy, at: idx + 1)
+        selectedClip = copy
+        appState.currentProject = project
+    }
+    
+    private func deleteSelected() {
+        guard var project = appState.currentProject,
+              let clip = selectedClip,
+              let idx = project.clips.firstIndex(where: { $0.id == clip.id }) else { return }
+        project.clips.remove(at: idx)
+        selectedClip = nil
+        appState.currentProject = project
+    }
+}
+
+#if os(iOS)
+// MARK: - Video Player View (iOS)
+struct VideoPlayerView: View {
+    @Binding var currentTime: CMTime
+    @Binding var isPlaying: Bool
+    let project: VideoProject?
+
+    @State private var player = AVPlayer()
+    @State private var timeObserver: Any?
+
+    var body: some View {
+        Group {
+            if let project, project.clips.isEmpty == false {
+                VideoPlayer(player: player)
+                    .background(Color.black)
+                    .onAppear { rebuildComposition(with: project) }
+                    .onChange(of: isPlaying) { _, playing in playing ? player.play() : player.pause() }
+                    .onChange(of: currentTime) { _, t in player.seek(to: t, toleranceBefore: .zero, toleranceAfter: .zero) }
+                    .onChange(of: project.clips) { _, _ in rebuildComposition(with: project) }
+            } else {
+                ZStack {
+                    Color.black
+                    VStack(spacing: 8) {
+                        Image(systemName: "video")
+                            .font(.largeTitle)
+                            .foregroundColor(.secondary)
+                        Text("Import a video to preview")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+        .onDisappear {
+            if let obs = timeObserver { player.removeTimeObserver(obs) }
+            timeObserver = nil
+            player.pause()
+        }
+    }
+
+    private func rebuildComposition(with project: VideoProject) {
+        Task {
+            let composition = AVMutableComposition()
+            let videoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid)
+            let audioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+            var cursor: CMTime = .zero
+
+            for clip in project.clips {
+                let asset = AVURLAsset(url: clip.videoURL)
+                if let v = try? await asset.loadTracks(withMediaType: .video).first {
+                    try? videoTrack?.insertTimeRange(CMTimeRange(start: clip.startTime, duration: clip.duration), of: v, at: cursor)
+                }
+                if let a = try? await asset.loadTracks(withMediaType: .audio).first {
+                    try? audioTrack?.insertTimeRange(CMTimeRange(start: clip.startTime, duration: clip.duration), of: a, at: cursor)
+                }
+                cursor = CMTimeAdd(cursor, clip.duration)
+            }
+
+            await MainActor.run {
+                let item = AVPlayerItem(asset: composition)
+                player.replaceCurrentItem(with: item)
+
+                if let obs = timeObserver { player.removeTimeObserver(obs) }
+                timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.1, preferredTimescale: 600), queue: .main) { t in
+                    currentTime = t
+                }
+
+                if isPlaying { player.play() }
+            }
+        }
+    }
+}
+#endif
 
 #if os(macOS)
 // MARK: - Video Player View (macOS)
@@ -150,77 +329,6 @@ struct VideoPlayerView: NSViewRepresentable {
                 }
             }
         }
-    }
-}
-#else
-// MARK: - Video Player View (iOS)
-import AVKit
-struct VideoPlayerView: View {
-    @Binding var currentTime: CMTime
-    @Binding var isPlaying: Bool
-    let project: VideoProject?
-    
-    @State private var player: AVPlayer = AVPlayer()
-    @State private var timeObserver: Any?
-    
-    var body: some View {
-        Group {
-            if project?.clips.isEmpty == false {
-                VideoPlayer(player: player)
-            } else {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.secondary.opacity(0.1))
-                    .overlay(Image(systemName: "video").foregroundColor(.secondary))
-            }
-        }
-        .onAppear { rebuildPlayerItem() }
-        .onChange(of: project?.clips) { _, _ in rebuildPlayerItem() }
-        .onChange(of: isPlaying) { _, playing in
-            if playing { player.play() } else { player.pause() }
-        }
-        .onChange(of: currentTime) { _, newValue in
-            let target = newValue
-            player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
-        }
-        .onDisappear {
-            if let obs = timeObserver { player.removeTimeObserver(obs) }
-            timeObserver = nil
-            player.pause()
-        }
-    }
-    
-    private func rebuildPlayerItem() {
-        guard let project else { return }
-        let composition = AVMutableComposition()
-        let videoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid)
-        var cursor: CMTime = .zero
-        for clip in project.clips {
-            let asset = AVURLAsset(url: clip.videoURL)
-            if let src = try? awaitTrack(asset: asset) {
-                let range = CMTimeRange(start: clip.startTime, duration: clip.duration)
-                try? videoTrack?.insertTimeRange(range, of: src, at: cursor)
-                cursor = CMTimeAdd(cursor, clip.duration)
-            }
-        }
-        let item = AVPlayerItem(asset: composition)
-        player.replaceCurrentItem(with: item)
-        if timeObserver != nil { player.removeTimeObserver(timeObserver!) ; timeObserver = nil }
-        timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.1, preferredTimescale: 600), queue: .main) { time in
-            currentTime = time
-        }
-        if isPlaying { player.play() }
-    }
-    
-    private func awaitTrack(asset: AVURLAsset) -> AVAssetTrack? {
-        var result: AVAssetTrack?
-        let semaphore = DispatchSemaphore(value: 0)
-        Task {
-            let track = try? await asset.loadTracks(withMediaType: .video).first
-            result = track
-            semaphore.signal()
-        }
-        semaphore.wait()
-        return result
     }
 }
 #endif
@@ -351,9 +459,14 @@ struct TimelineClipView: View {
     }
 }
 
-// MARK: - Clip Properties View
-struct ClipPropertiesView: View {
-    let clip: EditableClip
+// MARK: - Clip Properties Panel (editable)
+struct ClipPropertiesPanel: View {
+    @EnvironmentObject var appState: AppState
+    let clipId: UUID
+    
+    @State private var volume: Float = 1.0
+    @State private var speed: Float = 1.0
+    @State private var durationSeconds: Double = 0
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -363,26 +476,51 @@ struct ClipPropertiesView: View {
             HStack {
                 Text("Duration:")
                 Spacer()
-                Text(String(format: "%.1fs", clip.duration.seconds))
+                Text(String(format: "%.1fs", durationSeconds))
             }
             
             HStack {
                 Text("Volume:")
                 Spacer()
-                Slider(value: .constant(clip.volume), in: 0...1)
-                    .frame(width: 100)
+                Slider(value: Binding(get: { Double(volume) }, set: { volume = Float($0); applyChanges() }), in: 0...1)
+                    .frame(width: 160)
             }
             
             HStack {
                 Text("Speed:")
                 Spacer()
-                Slider(value: .constant(clip.speed), in: 0.5...2.0)
-                    .frame(width: 100)
+                Slider(value: Binding(get: { Double(speed) }, set: { speed = Float($0); applyChanges() }), in: 0.5...2.0)
+                    .frame(width: 160)
             }
         }
         .padding()
         .background(Color.secondary.opacity(0.1))
-        .cornerRadius(8)
+        .cornerRadius(12)
+        .onAppear(perform: loadFromState)
+        .onChange(of: appState.currentProject?.clips) { _, _ in loadFromState() }
+    }
+    
+    private func loadFromState() {
+        guard let idx = appState.currentProject?.clips.firstIndex(where: { $0.id == clipId }),
+              let clip = appState.currentProject?.clips[idx] else { return }
+        volume = clip.volume
+        speed = clip.speed
+        durationSeconds = clip.duration.seconds
+    }
+    
+    private func applyChanges() {
+        guard var project = appState.currentProject,
+              let idx = project.clips.firstIndex(where: { $0.id == clipId }) else { return }
+        project.clips[idx].volume = volume
+        project.clips[idx].speed = speed
+        appState.currentProject = project
+        NotificationCenter.default.post(name: .storycutUpdateClip, object: nil, userInfo: [
+            "clipId": clipId,
+            "start": project.clips[idx].startTime.seconds,
+            "end": project.clips[idx].endTime.seconds,
+            "volume": volume,
+            "speed": speed
+        ])
     }
 }
 

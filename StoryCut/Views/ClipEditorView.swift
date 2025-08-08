@@ -137,7 +137,7 @@ struct ClipEditorView: View {
                             }
                         }
                         
-                        if let selectedFilter = selectedFilter {
+                        if selectedFilter != nil {
                             VStack(spacing: 12) {
                                 HStack {
                                     Text("Intensity:")

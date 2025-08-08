@@ -7,7 +7,7 @@ import AppKit
 
 // MARK: - Video Project
 struct VideoProject: Identifiable, Codable {
-    let id = UUID()
+    var id = UUID()
     var name: String
     var clips: [EditableClip]
     var audioTracks: [AudioTrack]
