@@ -10,6 +10,8 @@ import AVFoundation
 
 // MARK: - Shared Data Models
 
+// Gate to avoid duplicate conformance if another module (e.g., FoundationModels) provides this.
+#if !canImport(FoundationModels)
 extension CMTime: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
@@ -22,6 +24,7 @@ extension CMTime: Codable {
         try container.encode(seconds)
     }
 }
+#endif
 import FoundationModels
 
 // MARK: - Chat Models

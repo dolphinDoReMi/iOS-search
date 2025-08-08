@@ -52,15 +52,21 @@ struct ImportView: View {
                         showingImagePicker = true
                     }
                     
-                    ImportOptionCard(
-                        title: "Import from Social Link",
-                        subtitle: "Paste TikTok/Reels/Shorts URL",
-                        icon: "link",
-                        color: .orange
-                    ) {
-                        presentSocialLinkPrompt()
+                    // Language input box
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Edit Instructions")
+                            .font(.headline)
+                        Text("Describe your edit: e.g., 'trim to 15s, add crossfade, overlay caption at 3s'.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextEditor(text: $appState.editPrompt)
+                            .scrollContentBackground(.hidden)
+                            .frame(height: 80)
+                            .padding(10)
+                            .background(Color.secondary.opacity(0.1))
+                            .cornerRadius(12)
                     }
-
+                    .padding(.horizontal)
                 }
                 
                 // Imported Content Preview

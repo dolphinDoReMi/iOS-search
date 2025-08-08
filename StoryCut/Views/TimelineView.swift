@@ -1,11 +1,36 @@
 import SwiftUI
 import AVFoundation
+import UniformTypeIdentifiers
 #if os(iOS)
 import AVKit
 #endif
 #if os(macOS)
 import AppKit
 #endif
+
+// MARK: - Transferable for Drag & Drop
+struct ClipTransferable: Transferable, Codable {
+    let clipId: UUID
+    
+    static var transferRepresentation: some TransferRepresentation {
+        // Use a built-in content type to avoid declaring a custom UTI in Info.plist
+        CodableRepresentation(for: ClipTransferable.self, contentType: .data)
+    }
+}
+
+// File-scoped snapping helper so subviews can use it
+private func snapTimeGlobal(_ t: CMTime, project: VideoProject?, currentTime: CMTime, threshold: Double = 0.1) -> CMTime {
+    guard let clips = project?.clips else { return t }
+    let times = clips.flatMap { [ $0.startTime, $0.endTime ] } + [currentTime]
+    let target = t.seconds
+    var best: CMTime = t
+    var bestDiff = threshold
+    for x in times {
+        let d = abs(x.seconds - target)
+        if d < bestDiff { bestDiff = d; best = x }
+    }
+    return best
+}
 
 struct TimelineView: View {
     @EnvironmentObject var appState: AppState
@@ -14,6 +39,7 @@ struct TimelineView: View {
     @State private var selectedClip: EditableClip?
     @State private var showingClipEditor = false
     @State private var showDeleteConfirm = false
+    @State private var selectionRange: CMTimeRange?
     
     var body: some View {
         VStack(spacing: 0) {
@@ -40,10 +66,22 @@ struct TimelineView: View {
             // Timeline
             TimelineTrackView(
                 project: appState.currentProject,
+                totalDuration: appState.currentProject?.totalDuration ?? .zero,
                 currentTime: $currentTime,
-                selectedClip: $selectedClip
+                selectedClip: $selectedClip,
+                selectionRange: $selectionRange
             )
             .frame(height: 200)
+            
+            // Range edit toolbar
+            if selectionRange != nil {
+                RangeEditToolbar(
+                    onTrimToRange: trimSelectedClipToRange,
+                    onRippleDelete: rippleDeleteSelectedRange,
+                    onClear: { selectionRange = nil }
+                )
+                .padding(.horizontal)
+            }
             
             // Clip Properties + quick edit bar
             if let selectedClip = selectedClip {
@@ -55,7 +93,9 @@ struct TimelineView: View {
                     onTrimStart: trimStartToPlayhead,
                     onTrimEnd: trimEndToPlayhead,
                     onDuplicate: duplicateSelected,
-                    onDelete: { showDeleteConfirm = true }
+                    onDelete: { showDeleteConfirm = true },
+                    onMoveLeft: moveSelectedLeft,
+                    onMoveRight: moveSelectedRight
                 )
                 .padding(.horizontal)
                 .confirmationDialog("Delete clip?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
@@ -94,6 +134,25 @@ struct TimelineView: View {
     }
 }
 
+// MARK: - Range Edit Toolbar
+struct RangeEditToolbar: View {
+    let onTrimToRange: () -> Void
+    let onRippleDelete: () -> Void
+    let onClear: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Button(action: onTrimToRange) { Label("Trim to Range", systemImage: "scissors") }
+            Button(role: .destructive, action: onRippleDelete) { Label("Ripple Delete", systemImage: "delete.left") }
+            Button(action: onClear) { Label("Clear", systemImage: "xmark") }
+        }
+        .buttonStyle(.bordered)
+        .padding(8)
+        .background(Color.secondary.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
 // MARK: - IG-like Edit Toolbar
 struct EditToolbar: View {
     let onSplit: () -> Void
@@ -101,6 +160,8 @@ struct EditToolbar: View {
     let onTrimEnd: () -> Void
     let onDuplicate: () -> Void
     let onDelete: () -> Void
+    let onMoveLeft: () -> Void
+    let onMoveRight: () -> Void
     
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -109,6 +170,8 @@ struct EditToolbar: View {
                 Button(action: onTrimStart) { Label("Trim Start", systemImage: "arrow.uturn.backward") }
                 Button(action: onTrimEnd) { Label("Trim End", systemImage: "arrow.uturn.forward") }
                 Button(action: onDuplicate) { Label("Duplicate", systemImage: "plus.square.on.square") }
+                Button(action: onMoveLeft) { Label("Move Left", systemImage: "arrow.left.to.line") }
+                Button(action: onMoveRight) { Label("Move Right", systemImage: "arrow.right.to.line") }
                 Button(role: .destructive, action: onDelete) { Label("Delete", systemImage: "trash") }
             }
             .buttonStyle(.bordered)
@@ -138,24 +201,6 @@ extension TimelineView {
         appState.currentProject = project
     }
     
-    private func trimStartToPlayhead() {
-        guard var project = appState.currentProject,
-              let clip = selectedClip,
-              let idx = project.clips.firstIndex(where: { $0.id == clip.id }) else { return }
-        let t = currentTime
-        if t < project.clips[idx].endTime { project.clips[idx].startTime = t }
-        appState.currentProject = project
-    }
-    
-    private func trimEndToPlayhead() {
-        guard var project = appState.currentProject,
-              let clip = selectedClip,
-              let idx = project.clips.firstIndex(where: { $0.id == clip.id }) else { return }
-        let t = currentTime
-        if t > project.clips[idx].startTime { project.clips[idx].endTime = t }
-        appState.currentProject = project
-    }
-    
     private func duplicateSelected() {
         guard var project = appState.currentProject,
               let clip = selectedClip,
@@ -173,6 +218,79 @@ extension TimelineView {
               let idx = project.clips.firstIndex(where: { $0.id == clip.id }) else { return }
         project.clips.remove(at: idx)
         selectedClip = nil
+        appState.currentProject = project
+    }
+    
+    private func moveSelectedLeft() {
+        guard var project = appState.currentProject,
+              let clip = selectedClip,
+              let idx = project.clips.firstIndex(where: { $0.id == clip.id }),
+              idx > 0 else { return }
+        project.clips.swapAt(idx, idx - 1)
+        appState.currentProject = project
+    }
+    
+    private func moveSelectedRight() {
+        guard var project = appState.currentProject,
+              let clip = selectedClip,
+              let idx = project.clips.firstIndex(where: { $0.id == clip.id }),
+              idx < project.clips.count - 1 else { return }
+        project.clips.swapAt(idx, idx + 1)
+        appState.currentProject = project
+    }
+}
+
+extension TimelineView {
+    private func trimSelectedClipToRange() {
+        guard var project = appState.currentProject,
+              let range = selectionRange,
+              let clip = selectedClip,
+              let idx = project.clips.firstIndex(where: { $0.id == clip.id }) else { return }
+        let start = snapTimeGlobal(range.start, project: project, currentTime: currentTime)
+        let end = snapTimeGlobal(range.start + range.duration, project: project, currentTime: currentTime)
+        if start > project.clips[idx].startTime { project.clips[idx].startTime = start }
+        if end < project.clips[idx].endTime { project.clips[idx].endTime = end }
+        selectionRange = nil
+        appState.currentProject = project
+    }
+    
+    private func rippleDeleteSelectedRange() {
+        guard var project = appState.currentProject,
+              let range = selectionRange else { return }
+        
+        // Remove content inside range from overlapping clips and close the gap
+        var newClips: [EditableClip] = []
+        for clip in project.clips {
+            // If clip entirely before or after range, keep and shift if needed
+            if clip.endTime <= range.start {
+                newClips.append(clip)
+                continue
+            }
+            if clip.startTime >= range.end {
+                var shifted = clip
+                shifted.startTime = CMTimeSubtract(shifted.startTime, range.duration)
+                shifted.endTime = CMTimeSubtract(shifted.endTime, range.duration)
+                newClips.append(shifted)
+                continue
+            }
+            // Overlap: may produce 0, 1 or 2 clips
+            if clip.startTime < range.start {
+                var left = clip
+                left.endTime = range.start
+                newClips.append(left)
+            }
+            if clip.endTime > range.end {
+                var right = clip
+                right.startTime = range.end
+                // shift right segment left by deleted duration
+                right.startTime = CMTimeSubtract(right.startTime, range.duration)
+                right.endTime = CMTimeSubtract(right.endTime, range.duration)
+                right.id = UUID()
+                newClips.append(right)
+            }
+        }
+        project.clips = newClips
+        selectionRange = nil
         appState.currentProject = project
     }
 }
@@ -263,7 +381,7 @@ struct VideoPlayerView: NSViewRepresentable {
         view.wantsLayer = true
         view.layer?.backgroundColor = NSColor.black.cgColor
         let playerLayer = AVPlayerLayer()
-        playerLayer.videoGravity = .resizeAspectFill
+        playerLayer.videoGravity = .resizeAspect
         playerLayer.frame = view.bounds
         view.layer?.addSublayer(playerLayer)
         context.coordinator.playerLayer = playerLayer
@@ -276,6 +394,7 @@ struct VideoPlayerView: NSViewRepresentable {
         if let project = project, !project.clips.isEmpty {
             context.coordinator.updateComposition(with: project)
         }
+        if isPlaying { context.coordinator.player?.play() } else { context.coordinator.player?.pause() }
     }
     
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -300,33 +419,37 @@ struct VideoPlayerView: NSViewRepresentable {
         }
         
         func updateComposition(with project: VideoProject) {
-            Task {
-                await MainActor.run {
-                    let composition = AVMutableComposition()
-                    let videoTrack = composition.addMutableTrack(
-                        withMediaType: .video,
-                        preferredTrackID: kCMPersistentTrackID_Invalid
-                    )
-                    var currentTime = CMTime.zero
-                    Task {
-                        for clip in project.clips {
-                            let asset = AVURLAsset(url: clip.videoURL)
-                            let assetTrack = try? await asset.loadTracks(withMediaType: .video).first
-                            if let assetTrack = assetTrack {
-                                try? videoTrack?.insertTimeRange(
-                                    CMTimeRange(start: clip.startTime, duration: clip.duration),
-                                    of: assetTrack,
-                                    at: currentTime
-                                )
-                            }
-                            currentTime = CMTimeAdd(currentTime, clip.duration)
-                        }
-                        await MainActor.run {
-                            let playerItem = AVPlayerItem(asset: composition)
-                            player?.replaceCurrentItem(with: playerItem)
-                        }
+            Task { @MainActor in
+                let composition = AVMutableComposition()
+                let videoTrack = composition.addMutableTrack(
+                    withMediaType: .video,
+                    preferredTrackID: kCMPersistentTrackID_Invalid
+                )
+                let audioTrack = composition.addMutableTrack(
+                    withMediaType: .audio,
+                    preferredTrackID: kCMPersistentTrackID_Invalid
+                )
+                var current: CMTime = .zero
+                for clip in project.clips {
+                    let asset = AVURLAsset(url: clip.videoURL)
+                    if let v = try? await asset.loadTracks(withMediaType: .video).first {
+                        try? videoTrack?.insertTimeRange(
+                            CMTimeRange(start: clip.startTime, duration: clip.duration),
+                            of: v,
+                            at: current
+                        )
                     }
+                    if let a = try? await asset.loadTracks(withMediaType: .audio).first {
+                        try? audioTrack?.insertTimeRange(
+                            CMTimeRange(start: clip.startTime, duration: clip.duration),
+                            of: a,
+                            at: current
+                        )
+                    }
+                    current = CMTimeAdd(current, clip.duration)
                 }
+                let item = AVPlayerItem(asset: composition)
+                player?.replaceCurrentItem(with: item)
             }
         }
     }
@@ -359,6 +482,34 @@ struct TimelineControlsView: View {
                         .font(.title2)
                 }
             }
+            
+            // Frame-by-frame Controls (Final Cut style)
+            HStack(spacing: 16) {
+                Button { currentTime = .zero } label: {
+                    Image(systemName: "backward.end")
+                }
+                Button { step(by: -1) } label: {
+                    Image(systemName: "backward.frame")
+                }
+                Button { isPlaying.toggle() } label: {
+                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                }
+                Button { step(by: +1) } label: {
+                    Image(systemName: "forward.frame")
+                }
+                Button { currentTime = totalDuration } label: {
+                    Image(systemName: "forward.end")
+                }
+                Divider().frame(height: 16)
+                Text(timeString(from: currentTime))
+                    .monospacedDigit()
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Text("30 fps")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.bordered)
             
             // Time Slider
             VStack(spacing: 8) {
@@ -406,29 +557,153 @@ struct TimelineControlsView: View {
         let remainingSeconds = seconds % 60
         return String(format: "%d:%02d", minutes, remainingSeconds)
     }
+
+    // MARK: - Frame stepping helpers
+    private func frameDuration() -> CMTime {
+        // Default to 30 fps; adjust when metadata detection is added
+        return CMTime(seconds: 1.0 / 30.0, preferredTimescale: 600)
+    }
+
+    private func step(by frames: Int) {
+        // Pause before nudging a single frame, like Final Cut
+        isPlaying = false
+        let delta = CMTimeMultiply(frameDuration(), multiplier: Int32(frames))
+        var target = CMTimeAdd(currentTime, delta)
+        if CMTimeCompare(target, .zero) < 0 { target = .zero }
+        if CMTimeCompare(target, totalDuration) > 0 { target = totalDuration }
+        currentTime = target
+    }
 }
 
 // MARK: - Timeline Track View
 struct TimelineTrackView: View {
+    @EnvironmentObject var appState: AppState
     let project: VideoProject?
+    let totalDuration: CMTime
     @Binding var currentTime: CMTime
     @Binding var selectedClip: EditableClip?
+    @Binding var selectionRange: CMTimeRange?
     
     var body: some View {
+        GeometryReader { geo in
+            let width = geo.size.width - 32
+            ZStack(alignment: .topLeading) {
+                timelineScrollView(width: width)
+                    .background(Color.secondary.opacity(0.1))
+                
+                selectionOverlay(width: width, geo: geo)
+            }
+            .contentShape(Rectangle())
+            .highPriorityGesture(timelineDragGesture(width: width))
+        }
+    }
+    
+    @ViewBuilder
+    private func timelineScrollView(width: CGFloat) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 0) {
-                ForEach(project?.clips ?? [], id: \.id) { clip in
-                    TimelineClipView(
-                        clip: clip,
-                        isSelected: selectedClip?.id == clip.id
-                    ) {
-                        selectedClip = clip
-                    }
-                }
+                                        ForEach(project?.clips ?? [], id: \.id) { clip in
+                            TimelineClipView(
+                                clip: clip,
+                                isSelected: selectedClip?.id == clip.id
+                            ) {
+                                selectedClip = clip
+                            }
+                            .frame(width: 60)
+                            .draggable(ClipTransferable(clipId: clip.id))
+                        }
             }
             .padding(.horizontal)
+            .dropDestination(for: ClipTransferable.self) { items, location in
+                handleDrop(items: items, location: location)
+            }
         }
-        .background(Color.secondary.opacity(0.1))
+    }
+    
+    private func handleDrop(items: [ClipTransferable], location: CGPoint) -> Bool {
+        guard var proj = appState.currentProject else { return false }
+        guard let draggingItem = items.first, let from = proj.clips.firstIndex(where: { $0.id == draggingItem.clipId }) else { return false }
+        let widthPerClip: CGFloat = 60
+        let x = location.x - 16
+        var to = Int(x / widthPerClip)
+        to = max(0, min(to, max(0, proj.clips.count - 1)))
+        if from != to {
+            let moving = proj.clips.remove(at: from)
+            proj.clips.insert(moving, at: to)
+            appState.currentProject = proj
+        }
+        return true
+    }
+    
+    @ViewBuilder
+    private func selectionOverlay(width: CGFloat, geo: GeometryProxy) -> some View {
+        if let range = selectionRange, totalDuration.seconds > 0 {
+            let startSeconds = range.start.seconds
+            let endSeconds = (range.start + range.duration).seconds
+            let startX = CGFloat(startSeconds / totalDuration.seconds) * width + 16
+            let endX = CGFloat(endSeconds / totalDuration.seconds) * width + 16
+            Rectangle()
+                .fill(Color.accentColor.opacity(0.15))
+                .frame(width: max(0, endX - startX), height: geo.size.height)
+                .position(x: startX + max(0, endX - startX)/2, y: geo.size.height/2)
+                .allowsHitTesting(false)
+        }
+    }
+    
+    private func timelineDragGesture(width: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                handleDragChange(value: value, width: width)
+            }
+            .onEnded { _ in
+                handleDragEnd()
+            }
+    }
+    
+    private func handleDragChange(value: DragGesture.Value, width: CGFloat) {
+        guard totalDuration.seconds > 0 else { return }
+        let localX = max(0, min(value.location.x - 16, width))
+        let seconds = Double(localX / width) * totalDuration.seconds
+        let t = CMTime(seconds: seconds, preferredTimescale: 600)
+        if selectionRange == nil {
+            let snapped = snapTimeGlobal(t, project: project, currentTime: currentTime)
+            selectionRange = CMTimeRange(start: snapped, duration: .zero)
+        } else {
+            let snapped = snapTimeGlobal(t, project: project, currentTime: currentTime)
+            let start = selectionRange!.start
+            if snapped < start {
+                selectionRange = CMTimeRange(start: snapped, end: start)
+            } else {
+                selectionRange = CMTimeRange(start: start, end: snapped)
+            }
+        }
+    }
+    
+    private func handleDragEnd() {
+        if let range = selectionRange, range.duration.seconds < 0.05 { 
+            selectionRange = nil 
+        }
+    }
+}
+
+// Snapping helpers
+extension TimelineView {
+    private func trimStartToPlayhead() {
+        guard var project = appState.currentProject,
+              let clip = selectedClip,
+              let idx = project.clips.firstIndex(where: { $0.id == clip.id }) else { return }
+        let t = snapTimeGlobal(currentTime, project: project, currentTime: currentTime)
+        if t < project.clips[idx].endTime { project.clips[idx].startTime = t }
+        appState.currentProject = project
+    }
+    
+    private func trimEndToPlayhead() {
+        guard var project = appState.currentProject,
+              let clip = selectedClip,
+              let idx = project.clips.firstIndex(where: { $0.id == clip.id }) else { return }
+        let t = snapTimeGlobal(currentTime, project: project, currentTime: currentTime)
+        if t > project.clips[idx].startTime { project.clips[idx].endTime = t }
+        appState.currentProject = project
     }
 }
 

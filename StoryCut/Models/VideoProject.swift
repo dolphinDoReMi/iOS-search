@@ -146,5 +146,44 @@ struct ExportSettings: Codable {
     var thumbnailTime: CMTime = .zero
 }
 
-// MARK: - CMTime Codable Extension
-// Intentionally omitted here to avoid duplicate conformance when StoryCut is embedded.
+// MARK: - CMTime Codable Extension (for StoryCut target)
+extension CMTime: Codable {
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let seconds = try container.decode(Double.self)
+        self = CMTime(seconds: seconds, preferredTimescale: 600)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(seconds)
+    }
+}
+
+// MARK: - Color Codable Extension
+extension Color: Codable {
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let colorName = try container.decode(String.self)
+        switch colorName {
+        case "white": self = .white
+        case "black": self = .black
+        case "blue": self = .blue
+        case "red": self = .red
+        case "green": self = .green
+        case "yellow": self = .yellow
+        case "orange": self = .orange
+        case "purple": self = .purple
+        case "pink": self = .pink
+        case "gray": self = .gray
+        default: self = .blue
+        }
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        // For simplicity, encode as a string representation
+        try container.encode("blue") // Default color
+    }
+}
+

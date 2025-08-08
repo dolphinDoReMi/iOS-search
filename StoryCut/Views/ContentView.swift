@@ -9,7 +9,7 @@ import UIKit
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
-    @State private var showingSocialExport = false
+    @State private var editPrompt: String = ""
     
     var body: some View {
         NavigationStack {
@@ -36,21 +36,17 @@ struct ContentView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 12) {
-                        Button(action: { showingSocialExport = true }) {
-                            Image(systemName: "square.and.arrow.up")
-                        }
-                        .disabled(appState.currentProject?.clips.isEmpty ?? true)
+                        TextField("Describe your edit (e.g., 'trim to 15s, add fade')", text: $editPrompt)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(minWidth: 200)
                     }
                 }
                 #else
                 ToolbarItem(placement: .primaryAction) {
                     HStack(spacing: 12) {
-                        // Quick Social Export Button
-                        Button(action: { showingSocialExport = true }) {
-                            Image(systemName: "square.and.arrow.up")
-                                .foregroundColor(.green)
-                        }
-                        .disabled(appState.currentProject?.clips.isEmpty ?? true)
+                        TextField("Describe your edit (e.g., 'trim to 15s, add fade')", text: $editPrompt)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(minWidth: 260)
                         
                         // Full Export Button
                         if appState.currentProject != nil {
@@ -83,9 +79,6 @@ struct ContentView: View {
         }
         .sheet(isPresented: $appState.showingExportSheet) {
             ExportSummaryView()
-        }
-        .sheet(isPresented: $showingSocialExport) {
-            SocialMediaExportView()
         }
     }
 }

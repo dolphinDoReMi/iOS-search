@@ -11,6 +11,8 @@ struct ExportView: View {
     @State private var exportProgress: Double = 0.0
     @State private var showingExportSuccess = false
     @State private var exportedURL: URL?
+    @State private var isExportingFCPXML = false
+    @State private var exportedFCPXMLURL: URL?
     
     var body: some View {
         ScrollView {
@@ -143,6 +145,48 @@ struct ExportView: View {
                 }
                 .padding()
                 
+                // Final Cut Pro Handoff
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Final Cut Pro")
+                        .font(.headline)
+                    Text("Export your timeline as FCPXML for deeper editing in Final Cut Pro.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Button(action: exportFCPXML) {
+                        HStack {
+                            if isExportingFCPXML {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(0.8)
+                            } else {
+                                Image(systemName: "square.and.arrow.up.on.square")
+                            }
+                            Text(isExportingFCPXML ? "Exporting FCPXML..." : "Export FCPXML for Final Cut Pro")
+                                .fontWeight(.semibold)
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(isExportingFCPXML ? Color.gray : Color.accentColor)
+                        .cornerRadius(12)
+                    }
+                    .disabled(isExportingFCPXML || appState.currentProject?.clips.isEmpty ?? true)
+
+                    if let fcpxURL = exportedFCPXMLURL {
+                        #if os(iOS)
+                        ShareLink(item: fcpxURL) {
+                            Label("Share FCPXML", systemImage: "square.and.arrow.up")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        #endif
+                        Text(fcpxURL.lastPathComponent)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding()
+                
                 // Export Button
                 Button(action: startExport) {
                     HStack {
@@ -220,6 +264,24 @@ struct ExportView: View {
                 case .failure(let error):
                     print("Export failed: \(error)")
                 }
+            }
+        }
+    }
+
+    private func exportFCPXML() {
+        guard let project = appState.currentProject, project.clips.isEmpty == false else { return }
+        isExportingFCPXML = true
+        let service = FCPXMLExportService()
+        Task {
+            do {
+                let url = try await service.exportFCPXML(project: project)
+                await MainActor.run {
+                    self.exportedFCPXMLURL = url
+                    self.isExportingFCPXML = false
+                }
+            } catch {
+                print("FCPXML export failed: \(error)")
+                await MainActor.run { self.isExportingFCPXML = false }
             }
         }
     }
