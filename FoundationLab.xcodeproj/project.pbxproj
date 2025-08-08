@@ -21,16 +21,32 @@
 		0ABC0C9B2E09AB5300A09018 /* Physiqa.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Physiqa.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0ADB46DC2E0CE81900C29293 /* Psylean.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Psylean.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0ADB48272E0D84EE00C29293 /* Murmer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Murmer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0AC0DE012E20000100C0DE01 /* StoryCut.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StoryCut.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		8FE6666A2E0D1BC10062EE2F /* Exceptions for "Psylean" folder in "Psylean" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = 0ADB46DB2E0CE81900C29293 /* Psylean */;
-		};
+        8FE6666A2E0D1BC10062EE2F /* Exceptions for "Psylean" folder in "Psylean" target */ = {
+            isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+            membershipExceptions = (
+                Info.plist,
+            );
+            target = 0ADB46DB2E0CE81900C29293 /* Psylean */;
+        };
+        0AC0DE0A2E20000100C0DE01 /* Exceptions for "StoryCut" folder in "StoryCut" target */ = {
+            isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+            membershipExceptions = (
+                Info.plist,
+            );
+            target = 0AC0DE032E20000100C0DE01 /* StoryCut */;
+        };
+        0AC0DE0B2E20000100C0DE01 /* Exceptions for "StoryCut" folder in "Foundation Lab" target */ = {
+            isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+            membershipExceptions = (
+                Info.plist,
+                StoryCutApp.swift,
+            );
+            target = 0AAE4FFE2DF76E6600838F13 /* Foundation Lab */;
+        };
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -57,6 +73,15 @@
 			path = Murmer;
 			sourceTree = "<group>";
 		};
+        0AC0DE022E20000100C0DE01 /* StoryCut */ = {
+            isa = PBXFileSystemSynchronizedRootGroup;
+            exceptions = (
+                0AC0DE0A2E20000100C0DE01 /* Exceptions for "StoryCut" folder in "StoryCut" target */,
+                0AC0DE0B2E20000100C0DE01 /* Exceptions for "StoryCut" folder in "Foundation Lab" target */,
+            );
+            path = StoryCut;
+            sourceTree = "<group>";
+        };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -90,6 +115,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		0AC0DE052E20000100C0DE01 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -107,6 +139,7 @@
 				0ABC0C9C2E09AB5300A09018 /* Physiqa */,
 				0ADB46DD2E0CE81900C29293 /* Psylean */,
 				0ADB48282E0D84EE00C29293 /* Murmer */,
+				0AC0DE022E20000100C0DE01 /* StoryCut */,
 				0AAE50002DF76E6600838F13 /* Products */,
 				0A5454A72E1148A8002C2152 /* Foundation Lab.icon */,
 				0A6316F22E1291E900E13A6D /* Murmer.icon */,
@@ -120,6 +153,7 @@
 				0ABC0C9B2E09AB5300A09018 /* Physiqa.app */,
 				0ADB46DC2E0CE81900C29293 /* Psylean.app */,
 				0ADB48272E0D84EE00C29293 /* Murmer.app */,
+				0AC0DE012E20000100C0DE01 /* StoryCut.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -141,6 +175,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				0ADB46AD2E0CE6C100C29293 /* Foundation Lab */,
+				0AC0DE022E20000100C0DE01 /* StoryCut */,
 			);
 			name = "Foundation Lab";
 			packageProductDependencies = (
@@ -217,6 +252,28 @@
 			productReference = 0ADB48272E0D84EE00C29293 /* Murmer.app */;
 			productType = "com.apple.product-type.application";
 		};
+		0AC0DE032E20000100C0DE01 /* StoryCut */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0AC0DE072E20000100C0DE01 /* Build configuration list for PBXNativeTarget "StoryCut" */;
+			buildPhases = (
+				0AC0DE042E20000100C0DE01 /* Sources */,
+				0AC0DE052E20000100C0DE01 /* Frameworks */,
+				0AC0DE062E20000100C0DE01 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				0AC0DE022E20000100C0DE01 /* StoryCut */,
+			);
+			name = StoryCut;
+			packageProductDependencies = (
+			);
+			productName = StoryCut;
+			productReference = 0AC0DE012E20000100C0DE01 /* StoryCut.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -237,6 +294,9 @@
 						CreatedOnToolsVersion = 26.0;
 					};
 					0ADB48262E0D84EE00C29293 = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					0AC0DE032E20000100C0DE01 = {
 						CreatedOnToolsVersion = 26.0;
 					};
 				};
@@ -269,6 +329,7 @@
 				0ABC0C9A2E09AB5300A09018 /* Physiqa */,
 				0ADB46DB2E0CE81900C29293 /* Psylean */,
 				0ADB48262E0D84EE00C29293 /* Murmer */,
+				0AC0DE032E20000100C0DE01 /* StoryCut */,
 			);
 		};
 /* End PBXProject section */
@@ -304,6 +365,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		0AC0DE062E20000100C0DE01 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -329,6 +397,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		0ADB48232E0D84EE00C29293 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0AC0DE042E20000100C0DE01 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -464,20 +539,20 @@
 				CODE_SIGN_ENTITLEMENTS = "Foundation Lab/FoundationLab.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = YQZQG7N4WG;
+				DEVELOPMENT_TEAM = 6CYS23FMLG;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_RESOURCE_ACCESS_APPLE_MUSIC = YES;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
 				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
 				ENABLE_RESOURCE_ACCESS_CALENDARS = YES;
-				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = YES;
 				ENABLE_RESOURCE_ACCESS_CONTACTS = YES;
 				ENABLE_RESOURCE_ACCESS_LOCATION = YES;
-				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
+				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = YES;
 				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -487,10 +562,14 @@
 				INFOPLIST_KEY_NSAppleMusicUsageDescription = "This app needs access to Apple Music to search and play music from your library.";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "This app needs access to your calendar to create and manage events.";
 				INFOPLIST_KEY_NSContactsUsageDescription = "This app needs access to your contacts to search and display contact information.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "This app needs access to your camera to record videos for editing.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "This app needs access to your health data to read steps, heart rate, workouts, and other health metrics.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "This app does not write health data.";
 				INFOPLIST_KEY_NSLocationUsageDescription = "This app needs access to your location to provide weather information and location-based services.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "This app needs access to your location to provide weather information and location-based services.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app needs access to your microphone for audio recording and editing.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app needs access to your photo library to import videos and photos for editing.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "This app uses speech recognition to generate subtitles.";
 				INFOPLIST_KEY_NSRemindersUsageDescription = "This app needs access to your reminders to create and manage reminder tasks.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -507,7 +586,7 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.rudrankriyam.foundationlab;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nova.lab;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
@@ -540,20 +619,20 @@
 				CODE_SIGN_ENTITLEMENTS = "Foundation Lab/FoundationLab.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = YQZQG7N4WG;
+				DEVELOPMENT_TEAM = 6CYS23FMLG;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_RESOURCE_ACCESS_APPLE_MUSIC = YES;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
 				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
 				ENABLE_RESOURCE_ACCESS_CALENDARS = YES;
-				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = YES;
 				ENABLE_RESOURCE_ACCESS_CONTACTS = YES;
 				ENABLE_RESOURCE_ACCESS_LOCATION = YES;
-				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
+				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = YES;
 				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -563,10 +642,14 @@
 				INFOPLIST_KEY_NSAppleMusicUsageDescription = "This app needs access to Apple Music to search and play music from your library.";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "This app needs access to your calendar to create and manage events.";
 				INFOPLIST_KEY_NSContactsUsageDescription = "This app needs access to your contacts to search and display contact information.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "This app needs access to your camera to record videos for editing.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "This app needs access to your health data to read steps, heart rate, workouts, and other health metrics.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "This app does not write health data.";
 				INFOPLIST_KEY_NSLocationUsageDescription = "This app needs access to your location to provide weather information and location-based services.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "This app needs access to your location to provide weather information and location-based services.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app needs access to your microphone for audio recording and editing.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app needs access to your photo library to import videos and photos for editing.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "This app uses speech recognition to generate subtitles.";
 				INFOPLIST_KEY_NSRemindersUsageDescription = "This app needs access to your reminders to create and manage reminder tasks.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -583,7 +666,7 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.rudrankriyam.foundationlab;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nova.lab;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
@@ -918,6 +1001,74 @@
 			};
 			name = Release;
 		};
+		0AC0DE082E20000100C0DE01 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = YQZQG7N4WG;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = StoryCut/Info.plist;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rudrankriyam.StoryCut;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		0AC0DE092E20000100C0DE01 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = YQZQG7N4WG;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = StoryCut/Info.plist;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rudrankriyam.StoryCut;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -962,6 +1113,15 @@
 			buildConfigurations = (
 				0ADB48302E0D84F000C29293 /* Debug */,
 				0ADB48312E0D84F000C29293 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0AC0DE072E20000100C0DE01 /* Build configuration list for PBXNativeTarget "StoryCut" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0AC0DE082E20000100C0DE01 /* Debug */,
+				0AC0DE092E20000100C0DE01 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

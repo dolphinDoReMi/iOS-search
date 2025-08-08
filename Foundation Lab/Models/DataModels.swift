@@ -6,6 +6,26 @@
 //
 
 import Foundation
+import AVFoundation
+// Provide Codable conformance for CMTime within Foundation Lab so StoryCut models compile when embedded.
+extension CMTime: Codable {
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let seconds = try container.decode(Double.self, forKey: .seconds)
+        let timescale = try container.decode(Int32.self, forKey: .timescale)
+        self = CMTime(seconds: seconds, preferredTimescale: timescale)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(seconds, forKey: .seconds)
+        try container.encode(timescale, forKey: .timescale)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case seconds, timescale
+    }
+}
 import FoundationModels
 
 // MARK: - Chat Models

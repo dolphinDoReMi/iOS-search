@@ -43,6 +43,8 @@ struct ExamplesView: View {
                 ModelAvailabilityView()
             case .generationOptions:
                 GenerationOptionsView()
+            case .storyCut:
+                StoryCutHostView()
             }
         }
     }
@@ -53,15 +55,28 @@ struct ExamplesView: View {
     private var exampleButtonsView: some View {
         LazyVGrid(columns: adaptiveGridColumns, spacing: Spacing.medium) {
             ForEach(ExampleType.allCases) { exampleType in
-                NavigationLink(value: exampleType) {
-                    GenericCardView(
-                        icon: exampleType.icon,
-                        title: exampleType.title,
-                        subtitle: exampleType.subtitle
-                    )
-                    .contentShape(Rectangle())
+                if exampleType == .storyCut {
+                    // Use explicit destination link for StoryCut to avoid any routing issues
+                    NavigationLink(destination: StoryCutHostView()) {
+                        GenericCardView(
+                            icon: exampleType.icon,
+                            title: exampleType.title,
+                            subtitle: exampleType.subtitle
+                        )
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    NavigationLink(value: exampleType) {
+                        GenericCardView(
+                            icon: exampleType.icon,
+                            title: exampleType.title,
+                            subtitle: exampleType.subtitle
+                        )
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, Spacing.medium)
@@ -120,6 +135,18 @@ struct ExamplesView: View {
             .glassEffect(.regular, in: .capsule)
 #endif
         }
+    }
+}
+
+// MARK: - StoryCut Host Wrapper
+struct StoryCutHostView: View {
+    @StateObject private var storyCutState = AppState()
+
+    var body: some View {
+        // Reuse StoryCut's main ContentView inside Foundation Lab
+        ContentView()
+            .environmentObject(storyCutState)
+            .navigationTitle("StoryCut")
     }
 }
 

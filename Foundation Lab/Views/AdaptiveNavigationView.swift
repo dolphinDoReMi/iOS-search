@@ -37,6 +37,9 @@ struct AdaptiveNavigationView: View {
             Tab(TabSelection.examples.displayName, systemImage: "sparkles", value: .examples) {
                 NavigationStack {
                     ExamplesView(viewModel: $contentViewModel)
+                    #if os(iOS)
+                        .navigationBarTitleDisplayMode(.large)
+                    #endif
                 }
             }
             
@@ -49,6 +52,9 @@ struct AdaptiveNavigationView: View {
             Tab(TabSelection.tools.displayName, systemImage: "wrench.and.screwdriver", value: .tools) {
                 NavigationStack {
                     ToolsExamplesView()
+                    #if os(iOS)
+                        .navigationBarTitleDisplayMode(.large)
+                    #endif
                 }
             }
             

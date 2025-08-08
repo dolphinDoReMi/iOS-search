@@ -18,6 +18,7 @@ enum ExampleType: String, CaseIterable, Identifiable {
     case modelAvailability = "model_availability"
     case generationGuides = "generation_guides"
     case generationOptions = "generation_options"
+    case storyCut = "storycut"
 
     var id: String { rawValue }
 
@@ -39,6 +40,8 @@ enum ExampleType: String, CaseIterable, Identifiable {
                 return "Generation Guides"
             case .generationOptions:
                 return "Generation Options"
+            case .storyCut:
+                return "StoryCut"
         }
     }
 
@@ -60,6 +63,8 @@ enum ExampleType: String, CaseIterable, Identifiable {
                 return "Guided generation with constraints"
             case .generationOptions:
                 return "Experiment with model parameters"
+            case .storyCut:
+                return "Vertical video editor"
         }
     }
 
@@ -81,6 +86,8 @@ enum ExampleType: String, CaseIterable, Identifiable {
                 return "slider.horizontal.3"
             case .generationOptions:
                 return "tuningfork"
+            case .storyCut:
+                return "film.stack"
         }
     }
 
