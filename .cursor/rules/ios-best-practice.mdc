@@ -1,0 +1,228 @@
+---
+alwaysApply: true
+---
+
+
+# iOS Development: Core Guidance (import/export)
+- Prefer **SwiftUI `PhotosPicker` (iOS 16+)** or **UIKit `PHPickerViewController` (iOS 14+)** for import. Avoid `UIImagePickerController` for new code.
+- Pickers don’t need read permission; request Photos permission **only when saving** (`PHPhotoLibrary.requestAuthorization(for: .addOnly)`).
+- Preserve EXIF/metadata: use **file-based** creation (`creationRequestForAssetFromImage/Video(atFileURL:)`) when saving; fall back to `PHAssetCreationRequest.addResource` only if you must write raw `Data`.
+- Export originals: resolve `PHAssetResource` and call `PHAssetResourceManager.default().writeData(...)` to a sandbox file URL; then share via `UIActivityViewController`.
+- Don’t load multi-GB files into memory; prefer **file URLs** and streaming.
+
+```swift
+// SwiftUI import (PhotosPicker): images+videos via file-based where possible
+import SwiftUI, PhotosUI, UniformTypeIdentifiers
+
+struct PickerDemoView: View {
+  @State private var items: [PhotosPickerItem] = []
+  @State private var imageData: [Data] = []
+  @State private var videoURLs: [URL] = []
+
+  var body: some View {
+    PhotosPicker(selection: $items, maxSelectionCount: 0, matching: .any(of: [.images, .videos])) {
+      Label("Pick Photos/Videos", systemImage: "photo.on.rectangle")
+    }
+    .onChange(of: items) { _, new in
+      Task {
+        imageData.removeAll(); videoURLs.removeAll()
+        for it in new {
+          if let type = try? await it.loadTransferable(type: UTType.self),
+             type.conforms(to: .movie),
+             let url = try? await it.loadTransferable(type: URL.self) {
+            videoURLs.append(url); continue
+          }
+          if let data = try? await it.loadTransferable(type: Data.self) {
+            imageData.append(data)
+          }
+        }
+      }
+    }
+  }
+}
+
+
+⸻
+
+Xcode Build & Validation — Best Practices
+
+1) Configs & Build Settings (use .xcconfig)
+
+Use three configs: Debug, Release, and CI (optional Staging). Keep settings in source-controlled .xcconfig files.
+
+Suggested layout
+
+Configs/
+  Base.xcconfig
+  Debug.xcconfig
+  Release.xcconfig
+  CI.xcconfig
+
+Base.xcconfig
+
+SWIFT_VERSION = 6.0
+IPHONEOS_DEPLOYMENT_TARGET = 16.0
+
+CODE_SIGN_STYLE = Automatic
+DEVELOPMENT_TEAM = YOURTEAMID
+
+SWIFT_STRICT_CONCURRENCY = complete
+SWIFT_COMPILATION_MODE = incremental
+ONLY_ACTIVE_ARCH = YES
+ENABLE_TESTABILITY = YES
+GCC_TREAT_WARNINGS_AS_ERRORS = YES
+SWIFT_TREAT_WARNINGS_AS_ERRORS = YES
+OTHER_SWIFT_FLAGS = $(inherited) -warn-concurrency -enable-bare-slash-regex
+DEBUG_INFORMATION_FORMAT = dwarf
+
+Debug.xcconfig
+
+#include "Base.xcconfig"
+SWIFT_OPTIMIZATION_LEVEL = -Onone
+ENABLE_ADDRESS_SANITIZER = YES
+ENABLE_THREAD_SANITIZER = NO
+DEAD_CODE_STRIPPING = NO
+
+Release.xcconfig
+
+#include "Base.xcconfig"
+SWIFT_COMPILATION_MODE = wholemodule
+SWIFT_OPTIMIZATION_LEVEL = -Osize
+ONLY_ACTIVE_ARCH = NO
+DEAD_CODE_STRIPPING = YES
+LLVM_LTO = YES_THIN
+DEBUG_INFORMATION_FORMAT = dwarf-with-dsym
+STRIP_INSTALLED_PRODUCT = YES
+
+CI.xcconfig (fail fast and reproducible builds)
+
+#include "Release.xcconfig"
+SWIFT_TREAT_WARNINGS_AS_ERRORS = YES
+GCC_TREAT_WARNINGS_AS_ERRORS = YES
+ENABLE_TESTABILITY = NO
+
+Apply these .xcconfig files to each target + project and commit them.
+
+2) Code Signing & Provisioning
+	•	Dev: Automatic signing with your DEVELOPMENT_TEAM.
+	•	CI/TestFlight/App Store: Keep Automatic signing; archive with a distribution certificate. Avoid manual profiles unless you must.
+	•	Always produce dSYMs (Release) for crash symbolication.
+
+3) Packages & Reproducibility
+	•	Commit Package.resolved. In CI, run:
+
+xcodebuild -resolvePackageDependencies -workspace YourApp.xcworkspace -scheme YourApp
+
+
+	•	Avoid version ranges like from: "1.0.0" for critical deps; pin exact versions in Package.resolved.
+
+4) CI Pipeline (xcodebuild)
+
+Add a CI job that gates every PR:
+
+# 0) Tooling (optional but recommended)
+swiftformat . --lint
+swiftlint
+
+# 1) Resolve deps
+xcodebuild -resolvePackageDependencies \
+  -workspace YourApp.xcworkspace \
+  -scheme YourApp
+
+# 2) Build + unit tests with coverage
+xcodebuild test \
+  -workspace YourApp.xcworkspace \
+  -scheme YourApp \
+  -configuration CI \
+  -destination 'platform=iOS Simulator,name=iPhone 15' \
+  -enableCodeCoverage YES \
+  -parallel-testing-enabled YES \
+  -skipPackagePluginValidation
+
+# 3) UI tests (if any) – optionally via a Test Plan
+xcodebuild test \
+  -workspace YourApp.xcworkspace \
+  -scheme YourAppUITests \
+  -configuration CI \
+  -destination 'platform=iOS Simulator,name=iPhone 15'
+
+# 4) Archive (Release/CI)
+xcodebuild archive \
+  -workspace YourApp.xcworkspace \
+  -scheme YourApp \
+  -configuration Release \
+  -archivePath build/YourApp.xcarchive \
+  -skipPackagePluginValidation
+
+# 5) Export for TestFlight / Ad-Hoc
+xcodebuild -exportArchive \
+  -archivePath build/YourApp.xcarchive \
+  -exportOptionsPlist ExportOptions.plist \
+  -exportPath build/export
+
+ExportOptions.plist (example)
+
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+ "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>method</key><string>app-store</string>
+  <key>uploadBitcode</key><false/>
+  <key>uploadSymbols</key><true/>
+  <key>manageAppVersionAndBuildNumber</key><true/>
+</dict></plist>
+
+5) Validation Gates (fail PRs if violated)
+	•	No warnings in CI (SWIFT_TREAT_WARNINGS_AS_ERRORS=YES).
+	•	Code coverage ≥ target (e.g., 60%) on app modules.
+	•	Bundle versioning: CFBundleShortVersionString and CFBundleVersion must increase vs last release.
+	•	Privacy: Info.plist keys present (NSPhotoLibraryAddUsageDescription etc.). If PhotoKit read is used, include NSPhotoLibraryUsageDescription.
+	•	dSYM present for Release archives.
+	•	App Size guardrail (e.g., IPA ≤ threshold); error if exceeded.
+	•	Localization lint (no missing strings) if you localize.
+
+6) Tests — What to write
+	•	Unit tests for I/O wrappers (e.g., a MediaIO service). Use temp directories; don’t touch the real Photos DB.
+	•	UI tests for the import/export flows (picker presentation, share sheet).
+	•	Performance tests for large file copies (e.g., 1–2 GB video).
+	•	Snapshot tests (optional) for critical screens.
+
+import XCTest
+
+final class MediaIOTests: XCTestCase {
+  func testCopyLargeFileIsStreaming() throws {
+    measure(metrics: [XCTClockMetric(), XCTMemoryMetric()]) {
+      // copy from tmp->tmp and assert low peak memory
+    }
+  }
+
+  func testExportRefusesMissingAsset() async throws {
+    // given PHAsset? = nil
+    // expect error path surfaced gracefully
+  }
+}
+
+7) App Store Readiness Checklist
+	•	Incremented version/build; marketing + build numbers aligned with CI.
+	•	Symbols uploaded (dSYM).
+	•	Privacy Manifests / usage descriptions complete.
+	•	Entitlements minimal; no debug entitlement leakage.
+	•	No private APIs; strip test-only code from Release.
+
+⸻
+
+Implementation Rules (assistant behavior)
+	•	When asked for “set up CI”, generate .xcconfig files, a minimal CI script (as above), and a ExportOptions.plist.
+	•	When asked to “fix build warnings”, move settings into .xcconfig, enable warnings-as-errors in CI, and propose code fixes.
+	•	When asked for “Photos import/export”, prefer SwiftUI PhotosPicker / UIKit PHPicker, file-based IO, and correct permissions.
+	•	When asked to “save to Photos”, request .addOnly, use file-based creation APIs, and fall back to addResource only if needed.
+  Use Xcode-beta and xcodebuild to validate the build everytime
+
+Anti-patterns (auto-fix if seen)
+	•	❌ Manual profiles with brittle signing in CI (prefer Automatic + Distribution cert).
+	•	❌ Shipping without dSYMs or symbols not uploaded.
+	•	❌ Treating warnings as non-fatal in CI.
+	•	❌ Loading whole videos into memory instead of file URLs/streams.
+	•	❌ Using UIImagePickerController for new flows.
+
+If you want, I can also drop in **starter `.xcconfig` files** and a minimal **GitHub Actions** or **Xcode Cloud** workflow tuned to your scheme—just tell me your **workspace name, scheme**, and whether you’re on **Actions** or **Xcode Cloud**.

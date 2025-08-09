@@ -40,6 +40,9 @@ struct TimelineView: View {
     @State private var showingClipEditor = false
     @State private var showDeleteConfirm = false
     @State private var selectionRange: CMTimeRange?
+    @State private var selectedCaptionLang: String? = nil
+    @State private var showEffectsBrowser: Bool = false
+    @State private var isSnapEnabled: Bool = true
     
     var body: some View {
         VStack(spacing: 0) {
@@ -59,7 +62,8 @@ struct TimelineView: View {
             TimelineControlsView(
                 currentTime: $currentTime,
                 isPlaying: $isPlaying,
-                totalDuration: appState.currentProject?.totalDuration ?? .zero
+                totalDuration: appState.currentProject?.totalDuration ?? .zero,
+                isSnapEnabled: $isSnapEnabled
             )
             .padding()
             
@@ -69,7 +73,8 @@ struct TimelineView: View {
                 totalDuration: appState.currentProject?.totalDuration ?? .zero,
                 currentTime: $currentTime,
                 selectedClip: $selectedClip,
-                selectionRange: $selectionRange
+                selectionRange: $selectionRange,
+                isSnapEnabled: $isSnapEnabled
             )
             .frame(height: 200)
             
@@ -102,6 +107,21 @@ struct TimelineView: View {
                     Button("Delete", role: .destructive) { deleteSelected() }
                     Button("Cancel", role: .cancel) {}
                 }
+            }
+            
+            // Captions editor (collapsed when no project)
+            if appState.currentProject != nil {
+                CaptionsEditorView(captions: Binding(get: { appState.currentProject?.captions ?? [] }, set: { appState.currentProject?.captions = $0 }), currentTime: $currentTime)
+                    .frame(minHeight: 200)
+            }
+            
+            // Toggleable Effects Browser (right-docked)
+            if showEffectsBrowser {
+                EffectsBrowserView()
+                    .frame(height: 200)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .padding(.horizontal)
             }
         }
         .sheet(isPresented: $showingClipEditor) {
@@ -304,9 +324,17 @@ struct VideoPlayerView: View {
 
     @State private var player = AVPlayer()
     @State private var timeObserver: Any?
+    @State private var showScopes = false
+    @State private var showInspector = false
+    @State private var brightness: Double = 0
+    @State private var contrast: Double = 1
+    @State private var saturation: Double = 1
+    @State private var temperature: Double = 0
+    @State private var tint: Double = 0
 
     var body: some View {
-        Group {
+        ZStack(alignment: .topTrailing) {
+            Group {
             if let project, project.clips.isEmpty == false {
                 VideoPlayer(player: player)
                     .background(Color.black)
@@ -326,6 +354,42 @@ struct VideoPlayerView: View {
                             .foregroundColor(.secondary)
                     }
                 }
+            }
+            }
+            .overlay(alignment: .bottom) {
+                if let line = project?.captions.activeCaption(at: currentTime, languageCode: nil) {
+                    Text(line.text)
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .padding(8)
+                        .background(.black.opacity(0.6))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .padding(.bottom, 8)
+                        .allowsHitTesting(false)
+                        .zIndex(0)
+                }
+            }
+            
+            HStack(spacing: 8) {
+                Button { showScopes.toggle() } label: { Image(systemName: "waveform.path.ecg") }
+                Button { showInspector.toggle() } label: { Image(systemName: "slider.horizontal.3") }
+            }
+            .padding(8)
+            
+            if showScopes {
+                ScopesView()
+                    .frame(width: 220, height: 140)
+                    .padding([.top, .leading], 8)
+                    .transition(.move(edge: .leading))
+                    .zIndex(1)
+            }
+            if showInspector {
+                ColorInspectorView(brightness: $brightness, contrast: $contrast, saturation: $saturation, temperature: $temperature, tint: $tint)
+                    .frame(width: 260)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .padding(8)
+                    .zIndex(1)
             }
         }
         .onDisappear {
@@ -461,6 +525,7 @@ struct TimelineControlsView: View {
     @Binding var currentTime: CMTime
     @Binding var isPlaying: Bool
     let totalDuration: CMTime
+    @Binding var isSnapEnabled: Bool
     
     var body: some View {
         VStack(spacing: 16) {
@@ -491,8 +556,14 @@ struct TimelineControlsView: View {
                 Button { step(by: -1) } label: {
                     Image(systemName: "backward.frame")
                 }
+                Button { step(by: -10) } label: {
+                    Image(systemName: "gobackward.10")
+                }
                 Button { isPlaying.toggle() } label: {
                     Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                }
+                Button { step(by: +10) } label: {
+                    Image(systemName: "goforward.10")
                 }
                 Button { step(by: +1) } label: {
                     Image(systemName: "forward.frame")
@@ -501,13 +572,16 @@ struct TimelineControlsView: View {
                     Image(systemName: "forward.end")
                 }
                 Divider().frame(height: 16)
-                Text(timeString(from: currentTime))
+                Text(timecode(from: currentTime))
                     .monospacedDigit()
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 Text("30 fps")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                Toggle("Snap", isOn: $isSnapEnabled)
+                    .toggleStyle(.switch)
+                    .labelsHidden()
             }
             .buttonStyle(.bordered)
             
@@ -552,10 +626,21 @@ struct TimelineControlsView: View {
     }
     
     private func timeString(from time: CMTime) -> String {
-        let seconds = Int(time.seconds)
+        let seconds = Int(max(0, time.seconds))
         let minutes = seconds / 60
         let remainingSeconds = seconds % 60
         return String(format: "%d:%02d", minutes, remainingSeconds)
+    }
+
+    private func timecode(from time: CMTime) -> String {
+        // Simple HH:MM:SS:FF display at 30 fps
+        let totalFrames = Int((max(0, time.seconds)) * 30.0)
+        let frames = totalFrames % 30
+        let totalSeconds = totalFrames / 30
+        let seconds = totalSeconds % 60
+        let minutes = (totalSeconds / 60) % 60
+        let hours = (totalSeconds / 3600)
+        return String(format: "%02d:%02d:%02d:%02d", hours, minutes, seconds, frames)
     }
 
     // MARK: - Frame stepping helpers
@@ -583,6 +668,7 @@ struct TimelineTrackView: View {
     @Binding var currentTime: CMTime
     @Binding var selectedClip: EditableClip?
     @Binding var selectionRange: CMTimeRange?
+    @Binding var isSnapEnabled: Bool
     
     var body: some View {
         GeometryReader { geo in
@@ -665,16 +751,15 @@ struct TimelineTrackView: View {
         let localX = max(0, min(value.location.x - 16, width))
         let seconds = Double(localX / width) * totalDuration.seconds
         let t = CMTime(seconds: seconds, preferredTimescale: 600)
+        let effective = (isSnapEnabled ? snapTimeGlobal(t, project: project, currentTime: currentTime) : t)
         if selectionRange == nil {
-            let snapped = snapTimeGlobal(t, project: project, currentTime: currentTime)
-            selectionRange = CMTimeRange(start: snapped, duration: .zero)
+            selectionRange = CMTimeRange(start: effective, duration: .zero)
         } else {
-            let snapped = snapTimeGlobal(t, project: project, currentTime: currentTime)
             let start = selectionRange!.start
-            if snapped < start {
-                selectionRange = CMTimeRange(start: snapped, end: start)
+            if effective < start {
+                selectionRange = CMTimeRange(start: effective, end: start)
             } else {
-                selectionRange = CMTimeRange(start: start, end: snapped)
+                selectionRange = CMTimeRange(start: start, end: effective)
             }
         }
     }
@@ -692,7 +777,7 @@ extension TimelineView {
         guard var project = appState.currentProject,
               let clip = selectedClip,
               let idx = project.clips.firstIndex(where: { $0.id == clip.id }) else { return }
-        let t = snapTimeGlobal(currentTime, project: project, currentTime: currentTime)
+        let t = isSnapEnabled ? snapTimeGlobal(currentTime, project: project, currentTime: currentTime) : currentTime
         if t < project.clips[idx].endTime { project.clips[idx].startTime = t }
         appState.currentProject = project
     }
@@ -701,7 +786,7 @@ extension TimelineView {
         guard var project = appState.currentProject,
               let clip = selectedClip,
               let idx = project.clips.firstIndex(where: { $0.id == clip.id }) else { return }
-        let t = snapTimeGlobal(currentTime, project: project, currentTime: currentTime)
+        let t = isSnapEnabled ? snapTimeGlobal(currentTime, project: project, currentTime: currentTime) : currentTime
         if t > project.clips[idx].startTime { project.clips[idx].endTime = t }
         appState.currentProject = project
     }

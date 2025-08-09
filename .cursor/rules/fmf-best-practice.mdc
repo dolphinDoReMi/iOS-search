@@ -1,0 +1,66 @@
+---
+description: Apple FMF usage & patterns for Swift projects. Enforce on‑device FMF, type‑safe generation with @Generable/@Guide, streaming, and tool‑calling. Single rule for entire repo.
+globs:
+  - "**/*.swift"
+  - "Package.swift"
+alwaysApply: false
+---
+
+# Apple FMF — Single Project Rule
+
+## Principles
+- Prefer **on‑device** FMF; no network LLM unless explicitly requested.
+- Keep prompts short; move constraints into **types** with `@Generable` and `@Guide`.
+- **Stream** output for responsive UI; never block the main thread.
+- Capability‑gate FMF features; degrade gracefully if unavailable.
+
+## Setup
+- Import: `import FoundationModels`
+- Session per surface:
+  ```swift
+  let session = LanguageModelSession()
+  ## Plain text
+  let text = try await session.respond(to: "Summarize notes in 3 bullets.")
+  ## Structure
+  @Generable
+    struct TodoItem {
+    @Guide(description: "Short, imperative task title")
+    let title: String
+    @Guide(description: "Priority 1–5")
+    let priority: Int
+    }
+
+    let item = try await session.respond(
+    to: "Create one todo for cleaning my inbox.",
+    generating: TodoItem.self
+    )
+    ## Streaming
+    let stream = session.streamResponse(to: "50‑word abstract on vector databases.")
+    for try await chunk in stream {
+    // append chunk to UI
+    }
+    ## Tool-Calling
+    let session = LanguageModelSession(tools: [CalendarTool(), ContactsTool()])
+    let res = try await session.respond(
+    to: "Find a 30‑min slot with Alice next week and draft an invite."
+    )
+    ## Error & Timeouts
+    do {
+    let r = try await session.respond(to: "…")
+    } catch {
+    // surface actionable error; offer retry/continue
+    }
+    ```
+UI Guidelines
+	•	Show partial output while streaming; include “Stop”.
+	•	Validate structured outputs before rendering.
+
+Testing & Telemetry
+	•	Snapshot test @Generable types with fixed prompts.
+	•	Local, privacy‑safe metrics: latency, tool counts (no PII).
+
+Anti‑Patterns
+	•	❌ Free‑form JSON without @Generable
+	•	❌ Blocking main thread
+	•	❌ Mixing cloud LLMs by default
+	•	❌ Secrets/tokens inside prompt

@@ -15,6 +15,7 @@ struct VideoProject: Identifiable, Codable {
     var exportSettings: ExportSettings
     var createdAt: Date
     var modifiedAt: Date
+    var captions: [CaptionLine] = []
     
     init(name: String = "Untitled Project") {
         self.name = name
@@ -147,6 +148,20 @@ struct ExportSettings: Codable {
 }
 
 // MARK: - CMTime Codable Extension (for StoryCut target)
+#if swift(>=6.0)
+extension CMTime: @retroactive Codable {
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let seconds = try container.decode(Double.self)
+        self = CMTime(seconds: seconds, preferredTimescale: 600)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(seconds)
+    }
+}
+#else
 extension CMTime: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
@@ -159,8 +174,36 @@ extension CMTime: Codable {
         try container.encode(seconds)
     }
 }
+#endif
 
 // MARK: - Color Codable Extension
+#if swift(>=6.0)
+extension Color: @retroactive Codable {
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let colorName = try container.decode(String.self)
+        switch colorName {
+        case "white": self = .white
+        case "black": self = .black
+        case "blue": self = .blue
+        case "red": self = .red
+        case "green": self = .green
+        case "yellow": self = .yellow
+        case "orange": self = .orange
+        case "purple": self = .purple
+        case "pink": self = .pink
+        case "gray": self = .gray
+        default: self = .blue
+        }
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        // For simplicity, encode as a string representation
+        try container.encode("blue") // Default color
+    }
+}
+#else
 extension Color: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
@@ -186,4 +229,5 @@ extension Color: Codable {
         try container.encode("blue") // Default color
     }
 }
+#endif
 
