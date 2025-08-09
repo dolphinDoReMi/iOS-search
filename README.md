@@ -211,6 +211,51 @@ Webpage metadata extraction and social media summary generation:
 
 
 
+## PRD: Final Cut Pro (baseline)
+### PRD goal
+Close the gap to a Final Cut Pro–class NLE and an IG Reels editor: magnetic timeline + roles, precision trims (slip/slide/roll/ripple), effects browser/stack, inspector with keyframing/masks, captions lanes + import/export, viewer + real scopes, color pipeline applied live and in export, robust export presets.
+
+### What’s landed toward that
+- Timeline/editing
+  - Snap toggle with playhead/edge snapping
+  - Range selection overlay; Trim to Range; Ripple Delete
+  - Clip reordering via drag & drop (basic magnetic feel)
+  - Frame controls: jump to ends, ±1/±10 frames, HH:MM:SS:FF timecode
+- Viewer
+  - Captions overlay (non-blocking), playback fixed
+  - Scopes and Color Inspector panels (UI scaffolds)
+- Effects
+  - Effects Browser scaffold (searchable grid)
+- Data/Export
+  - Export service stable; async path gated; progress reporting
+  - Codable fixes and build cleanup; Xcode‑beta xcodebuild green
+
+### Remaining to reach PRD parity
+- Timeline core
+  - Primary storyline with magnetic lanes by roles (Dialogue/FX/Music) and clip thumbnails
+  - Skimmer, markers, snapping modes; precision trims (roll/ ripple/ slip/ slide), snap toggle wired for all ops
+  - Audio lanes with volume keyframes and basic meters
+- Effects and inspector
+  - Drag‑drop effects onto clips; per‑clip effect stack (enable/reorder)
+  - Inspector with effect parameters, keyframing; masks (Bezier) and basic tracking
+- Color and scopes
+  - CoreImage render pipeline applied during playback/export (brightness/contrast/saturation/temp/tint to start)
+  - Real scopes (waveform, vectorscope, RGB parade) via Metal/CI
+- Captions
+  - Timeline captions lane(s); SRT/iTT import/export; FCPXML mapping
+- Export
+  - Replace deprecated AVMutableVideoComposition* with AVVideoComposition.Configuration (iOS 26+/macOS 15+), legacy fallback
+  - Presets for social (IG/TikTok/YouTube), role exports, audio loudness/normalization
+- UX polish
+  - Three‑pane layout (Browser/Viewer/Inspector), resizable panels, keyboard shortcuts
+  - Thumbnail caching and performant image generation
+
+### Proposed next milestones
+1) Magnetic lanes + thumbnails + markers + slip/slide/roll trims (foundation).  
+2) Effects stack with drag‑drop + Inspector parameters + live CI color pipeline.  
+3) Captions lanes with SRT/iTT + real scopes; modern video composition API swap.
+
+I’ll implement in that order, validating each step with Xcode‑beta xcodebuild and keeping older‑OS fallbacks.
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a pull request.
